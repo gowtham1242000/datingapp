@@ -11,3 +11,4 @@ const coinPackageSchema = new mongoose.Schema({
 const CoinPackage = mongoose.model('CoinPackage', coinPackageSchema);
 
 module.exports = CoinPackage;
+

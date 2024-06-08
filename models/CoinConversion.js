@@ -11,6 +11,7 @@ const heartConversionSchema = new Schema({
   indianRupees: { type: Number, required: true }
 });
 
+
 const referralsSchema = new Schema({
   coinPerReferreals: { type: Number, required: true }
 });

@@ -22,6 +22,7 @@ const userSchema = new mongoose.Schema({
 },
 { timestamps: true });
 
+
 // Method to generate OTP
 userSchema.methods.generateOTP = function() {
   const otp = crypto.randomInt(100000, 999999).toString(); // Generates a 6-digit OTP

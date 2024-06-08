@@ -14,6 +14,7 @@ adminSchema.pre('save', async function(next) {
   next();
 });
 
+
 // Password comparison method
 adminSchema.methods.comparePassword = function(candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);

@@ -27,13 +27,35 @@ router.post('/userRequestOTP', userController.userRequestOTP);
 router.post('/userVerifyOTP', userController.userVerifyOTP);
 router.post('/createlanguage', userController.createlanguage);
 router.post('/createUser/:userId', userController.createUser);
-router.put('updateUser/:userId', userController.updateUser);
-router.get('/getAllLanguages',userController.getAllLanguages);
+router.post('/createCoinPackage', userController.createCoinPackage);
+router.post('/FreeCoin', userController.FreeCoin);
+router.post('/createCoinConversion', userController.createCoinConversion);
+router.post('/wallpaper',userController.wallpaper);
+
+router.put('/updateUser/:userId', userController.updateUser);
 router.put('/updateLanguageById/:id', userController.updateLanguageById);
-router.delete('/deleteLanguageById/:id', userController.deleteLanguageById);
+router.put('/updateCoinPackage/:id', userController.updateCoinPackage);
+router.put('/updateFreeCoin/:id', userController.updateFreeCoin);
+router.put('/updateCoinConversion', userController.updateCoinConversion);
+router.put('/updateWallpaper/:id', userController.updateWallpaper);
+
+router.get('/getAllLanguages',userController.getAllLanguages);
 router.get('/searchByUsername', userController.searchByUsername);
+router.get('/getAllCoinPackages', userController.getAllCoinPackages);
+router.get('/getFreeCoin', userController.getFreeCoin);
+router.get('/getCoinConversion', userController.getCoinConversion);
+router.get('/getWallpaper/:id', userController.getWallpaper);
+router.get('/getAllWallpaper', userController.getAllWallpaper);
+
+
+router.delete('/deleteLanguageById/:id', userController.deleteLanguageById);
+router.delete('/deleteCoinPackage/:id', userController.deleteCoinPackage);
+router.delete('/deleteFreeCoin/:id', userController.deleteFreeCoin);
+router.delete('/deleteWallpaper/:id', userController.deleteWallpaper);
 // router.post('/login', userController.login);
 //router.get('/profile', authenticateJWT, userController.getProfile);
 //router.put('/profile', authenticateJWT, userController.updateProfile);
 router.get('/getUsers', userController.getUsers);
+
+router.post('/payment', userController.newPayment)
 module.exports = router;

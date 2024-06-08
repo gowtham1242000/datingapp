@@ -14,3 +14,4 @@ const wallpaperSchema = new mongoose.Schema({
 });
 
 module.exports = mongoose.model('Wallpaper', wallpaperSchema);
+

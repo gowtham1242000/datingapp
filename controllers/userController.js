@@ -11,7 +11,7 @@ var sha256 = require('sha256');
 var uniqid = require('uniqid');
 const path = require('path');
 const ms = require('ms');
-const sharp = require('sharp');
+const sharp = require('sharp'); 
 const fs = require('fs-extra');
 //const path = require('path');
 const Wallpaper = require('../models/Wallpaper');
@@ -673,4 +673,98 @@ console.log("thumbnailImgUrl------",thumbnailImgUrl)
   console.error(error);
   res.status(500).json({ message: 'Internal server error' });
 }
+};
+
+
+exports.updateWallpaper = async (req, res) => {
+  try {
+    const { name, oldPrice, newPrice, viewOrder, status } = req.body;
+    const wallpaperId = req.params.id;
+
+    // Check if the wallpaper exists
+    const wallpaper = await Wallpaper.findById(wallpaperId);
+    if (!wallpaper) {
+      return res.status(404).json({ message: 'Wallpaper not found' });
+    }
+
+    // Update the wallpaper fields
+    wallpaper.name = name || wallpaper.name; // Update name if provided, otherwise keep the existing name
+    wallpaper.oldPrice = oldPrice || wallpaper.oldPrice;
+    wallpaper.newPrice = newPrice || wallpaper.newPrice;
+    wallpaper.viewOrder = viewOrder || wallpaper.viewOrder;
+    wallpaper.status = status || wallpaper.status;
+
+    // Update the image field if a new image is provided
+    if (req.files && req.files.image) {
+      const image = req.files.image;
+      const imageName = image.name.replace(/ /g, '_');
+      const imagePath = `${WallpaperPath}/${wallpaper.name}/${imageName}`;
+
+      // Save the new image
+      fs.writeFileSync(imagePath, image.data);
+      wallpaper.image = `https://salesman.aindriya.co.in/${URLpathI}/${wallpaper.name}/${imageName}`;
+    }
+
+    // Save the updated wallpaper
+    await wallpaper.save();
+
+    res.status(200).json({ message: 'Wallpaper updated successfully', wallpaper });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+exports.getWallpaper = async (req, res) => {
+  try {
+    const wallpaperId = req.params.id;
+
+    // Find the wallpaper by ID
+    const wallpaper = await Wallpaper.findById(wallpaperId);
+    if (!wallpaper) {
+      return res.status(404).json({ message: 'Wallpaper not found' });
+    }
+
+    // Return the wallpaper
+    res.status(200).json({ wallpaper });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+exports.getAllWallpaper=async(req,res)=>{
+  try{
+    const AllWallpaper =await Wallpaper.find();
+    res.status(200).json(AllWallpaper)
+  }catch(error){
+    res.status(500).json({message:'Internal Server Error'})
+  }
+}
+
+exports.deleteWallpaper = async (req, res) => {
+  try {
+    const wallpaperId = req.params.id;
+
+    // Find the wallpaper by ID
+    const wallpaper = await Wallpaper.findById(wallpaperId);
+    if (!wallpaper) {
+      return res.status(404).json({ message: 'Wallpaper not found' });
+    }
+
+    // Delete the wallpaper
+    await Wallpaper.deleteOne({ _id: wallpaperId });
+
+    // Delete the associated image files (if any)
+    const imageDir = `${WallpaperPath}/${wallpaper.name}`;
+    if (fs.existsSync(imageDir)) {
+      fs.rmdirSync(imageDir, { recursive: true });
+    }
+
+    // Return success response
+    res.status(200).json({ message: 'Wallpaper deleted successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
 };
