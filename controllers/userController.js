@@ -1,8 +1,27 @@
 const User = require('../models/User');
 const Admin =require('../models/Admin');
 const Language = require('../models/Language');
+const CoinPackage = require('../models/CoinPackage')
+const FreeCoin = require('../models/FreeCoin');
+const CoinConversion =require('../models/CoinConversion');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
+const crypto = require('crypto');
+var sha256 = require('sha256');
+var uniqid = require('uniqid');
+const path = require('path');
+const ms = require('ms');
+const sharp = require('sharp');
+const fs = require('fs-extra');
+//const path = require('path');
+const Wallpaper = require('../models/Wallpaper');
+const editJsonFile    = require('edit-json-file');
+const formidable = require('formidable');
+
+const WallpaperPath = '/etc/ec/data';
+const URLpathI = 'wallpapers';
+
+require("dotenv").config();
 
 
 
@@ -10,6 +29,7 @@ const axios = require('axios');
 exports.registerAdmin = async (req, res) => {
   try{
     const { email, password } = req.body;
+
     console.log("email-------",email);
     const admin = new Admin({ email, password });
     await admin.save();
@@ -53,7 +73,7 @@ exports.loginAdmin = async (req, res) => {
 
 exports.createlanguage = async (req, res) => {
   try {
-      const { language, status } = req.body;
+      const { language, status, code } = req.body;
 
       // Validate input
       if (!language || !status) {
@@ -63,7 +83,8 @@ exports.createlanguage = async (req, res) => {
       // Create a new language document
       const newLanguage = new Language({
           language,
-          status
+          status,
+          code
       });
 
       // Save the language document to the database
@@ -212,13 +233,16 @@ exports.createUser = async (req,res) => {
 exports.updateUser = async (req, res) => {
   try {
     const id = req.params.userId;
-    const { username, dateOfBirth, language, place, gender, avatar } = req.body;
+    const { username, dateOfBirth, language, place, gender, avatar, coin, blocklist } = req.body;
 
     // Check if user exists
     const existingUser = await User.findById(id);
+    console.log("existingUser-------",existingUser)
+    console.log("id---------",id)
     if (!existingUser) {
       return res.status(404).json({ message: 'User not found' });
     }
+console.log("coin",coin);
 
     // Update user details
     if (username) existingUser.profile.username = username;
@@ -227,6 +251,9 @@ exports.updateUser = async (req, res) => {
     if (place) existingUser.profile.place = place;
     if (gender) existingUser.profile.gender = gender;
     if (avatar) existingUser.profile.avatar = avatar;
+    if (coin) existingUser.profile.coin = coin;
+    if (blocklist) existingUser.profile.blocklist =blocklist
+    //existingUser.
 
     // Save updated user details
     await existingUser.save();
@@ -263,6 +290,64 @@ exports.searchByUsername = async (req, res) => {
 };
 
 
+exports.createCoinPackage = async (req, res) => {
+  try {
+    const { coin, rateInInr, text, status } = req.body; // Get coin package data from request body
+
+    // Create a new coin package document
+    const newCoinPackage = await CoinPackage.create({ coin, rateInInr, text, status });
+
+    res.status(201).json({message:'Package Created Successfully',newCoinPackage});
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+};
+
+exports.updateCoinPackage = async (req, res) => {
+  try {
+    const coinPackageId = req.params.id;
+    const updates = req.body;
+
+    // Constructing the update object to only include the fields that are present in the request body
+    const updateFields = {};
+    for (const key in updates) {
+      updateFields[key] = updates[key];
+    }
+
+    // Update the document with the specified ID, including only the fields present in the updateFields object
+    const updatedCoinPackage = await CoinPackage.findByIdAndUpdate(coinPackageId, updateFields, { new: true });
+
+    res.status(200).json({message:'update Successfully',updatedCoinPackage});
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+};
+
+exports.getAllCoinPackages = async (req, res) => {
+  try {
+    const coinPackages = await CoinPackage.find();
+
+    res.status(200).json(coinPackages);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+};
+
+exports.deleteCoinPackage = async (req, res) => {
+  try {
+    const coinPackageId = req.params.id;
+
+    await CoinPackage.findByIdAndDelete(coinPackageId);
+
+    res.status(204).end();
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+};
 
 
 
@@ -284,3 +369,308 @@ exports.searchByUsername = async (req, res) => {
 //     res.status(400).send({ error: error.message });
 //   }
 // };
+
+
+exports.newPayment = async (req, res) => {
+   const merchant_id = 'PGTESTPAYUAT';
+ const salt_key = '099eb0cd-02cf-4e2a-8aca-3e6c6aff0399';
+ const PHONE_PE_HOST_URL = "https://api-preprod.phonepe.com/apis/pg-sandbox"
+  try {
+      const { name, merchantTransactionId, merchantUserId, amount } = req.body
+
+      const data = {
+          merchantId: merchant_id,
+          merchantTransactionId,
+          merchantUserId,
+          name,
+          amount: amount * 100,
+         // redirectUrl: `http://localhost:5174/${merchantTransactionId}`,
+          redirectMode: 'POST',
+          paymentInstrument: {
+              type: 'PAY_PAGE'
+          }
+      };
+      console.log("data---",data)
+      const payload = JSON.stringify(data);
+      console.log("payload--------",payload);
+      const bufferObj = await Buffer.from(JSON.stringify(payload), "utf8");
+      const base64String =bufferObj.toString("base64");
+      console.log("base64String--------",base64String);
+
+
+
+      // const payloadMain = Buffer.from(payload).toString('base64');
+      // console.log("payloadMain-------",payloadMain)
+      const keyIndex = 1;
+      const string = base64String + '/pg/v1/pay' + salt_key;
+      console.log("string------",string);
+      // const sha256 = crypto.createHash('sha256').update(string).digest('hex');
+      const sha256val = sha256(string);
+      const checksum = sha256val + '###' + keyIndex;
+
+      console.log("checksum------",checksum);
+      
+      axios.post(
+        `${PHONE_PE_HOST_URL}/pg/v1/pay`,
+        { request: base64String },{
+  headers:{
+    'Content-Type':'application/json',
+    'X-VERIFY':checksum,
+    'accept':'application/json'
+  }
+}).then( (setdata)=>{
+  console.log("--------------enter the console.-------")
+res.redirect(responce.data)
+})
+
+//       //const prod_URL = "https://api.phonepe.com/apis/hermes/pg/v1/pay"
+//        const testUrl = 'https://api-preprod.phonepe.com/apis/pg-sandbox'
+//        console.log("testUrl--------",testUrl)
+//       const options = {
+//           method: 'POST',
+//           url: testUrl,
+//           headers: {
+//               accept: 'application/json',
+//               'Content-Type': 'application/json',
+//               'X-VERIFY': testUrl
+//           },
+//           data: {
+//               request: payloadMain
+//           }
+//       };
+// console.log("options------",options)
+//       // axios.request(options).then(function (response) {
+//       //     console.log("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",response)
+//       //     return res.redirect(response.data.data.instrumentResponse.redirectInfo.url)
+//       // })
+//       axios
+//   .request(options)
+//       .then(function (response) {
+//       console.log("^^^^^^^^^^^^^^()^^^^^^",response.data);
+//   })
+//           .catch(function (error) {
+//             console.log("-----------error1")
+//               console.error(error);
+//           });
+
+  }catch (error) {
+    console.log("---------------error2")
+      res.status(200).send({
+          message: error.message,
+          success: false
+      })
+  } 
+  
+};
+
+
+
+exports.FreeCoin = async (req, res) => {
+  const { freeCoinforNewUser, expireAfter, status } = req.body;
+
+  try {
+    const freeCoin = new FreeCoin({
+      freeCoinforNewUser,
+      expireAfter, // Store expireAfter directly as days
+      status
+    });
+
+    await freeCoin.save();
+
+    res.status(200).json({ message: 'Free coins granted!', freeCoin });
+  } catch (error) {
+    res.status(500).json({ message: 'Error granting free coins', error });
+  }
+};
+
+exports.getFreeCoin = async (req, res) => {
+  try {
+    const freeCoins = await FreeCoin.find();
+    res.status(200).json(freeCoins);
+  } catch (error) {
+    res.status(500).json({ message: 'Error retrieving free coins', error });
+  }
+};
+
+exports.updateFreeCoin = async (req, res) => {
+  const { freeCoinforNewUser, expireAfter, status } = req.body;
+  console.log("status",status)
+  try {
+    const freeCoin = await FreeCoin.findByIdAndUpdate(req.params.id, {
+      freeCoinforNewUser,
+      expireAfter,
+      status
+    }, { new: true });
+
+    if (!freeCoin) {
+      return res.status(404).json({ message: 'Free coin not found' });
+    }
+
+    res.status(200).json({ message: 'Free coin updated!', freeCoin });
+  } catch (error) {
+    res.status(500).json({ message: 'Error updating free coin', error });
+  }
+};
+
+
+exports.deleteFreeCoin = async (req, res) => {
+  try {
+    const freeCoin = await FreeCoin.findByIdAndDelete(req.params.id);
+    if (!freeCoin) {
+      return res.status(404).json({ message: 'Free coin not found' });
+    }
+    res.status(200).json({ message: 'Free coin deleted!' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error deleting free coin', error });
+  }
+};
+
+
+
+
+// // Function to check and update expired coins' status
+// exports.checkExpiry = async (req, res) => {
+//   try {
+//     const now = new Date();
+//     const expiredCoins = await FreeCoin.updateMany(
+//       {
+//         status: true,
+//         createdAt: { $lt: new Date(now - req.body.expireAfter * 24 * 60 * 60 * 1000) }
+//       },
+//       { status: false }
+//     );
+
+//     res.status(200).json({ message: 'Expired coins status updated', expiredCoins });
+//   } catch (error) {
+//     res.status(500).json({ message: 'Error checking expired coins', error });
+//   }
+// };
+
+
+// Create CoinConversion Entry
+exports.createCoinConversion = async (req, res) => {
+  console.log(req.body);
+  const { coinHeartConversionFactor, heartConversionFactor, referrals } = req.body;
+
+  console.log("1",coinHeartConversionFactor);
+  console.log("2",heartConversionFactor);
+  console.log("3",referrals);
+
+  try {
+    // Create CoinConversion object with nested schema data
+    const coinConversion = new CoinConversion({
+      coinHeartConversionFactor,
+      heartConversionFactor,
+      referrals
+    });
+
+    await coinConversion.save();
+
+    res.status(200).json({ message: 'Coin conversion data created!', coinConversion });
+  } catch (error) {
+    console.log("error------".error);
+    res.status(500).json({ message: 'Error creating coin conversion data', error });
+  }
+};
+
+
+exports.getCoinConversion = async (req, res) => {
+  try {
+    const coinConversionData = await CoinConversion.findOne();
+    if (!coinConversionData) {
+      return res.status(404).json({ message: 'Coin conversion data not found' });
+    }
+    res.status(200).json({ message: 'Coin conversion data retrieved successfully', coinConversionData });
+  } catch (error) {
+    console.log("error------", error);
+    res.status(500).json({ message: 'Error retrieving coin conversion data', error });
+  }
+};
+
+exports.updateCoinConversion =async (req, res) =>{
+  const { coinHeartConversionFactor, heartConversionFactor, referrals } = req.body;
+  try {
+    const coinConversionData = await CoinConversion.findOne();
+    if (!coinConversionData) {
+      return res.status(404).json({ message: 'Coin conversion data not found' });
+    }
+    coinConversionData.coinHeartConversionFactor = coinHeartConversionFactor;
+    coinConversionData.heartConversionFactor = heartConversionFactor;
+    coinConversionData.referrals = referrals;
+
+    await coinConversionData.save();
+    res.status(200).json({ message: 'Coin conversion data updated successfully', coinConversionData });
+  } catch (error) {
+    console.log("error------", error);
+    res.status(500).json({ message: 'Error updating coin conversion data', error });
+  }
+}
+exports.wallpaper = async(req,res) =>{
+try {
+  console.log("req.body==============",req.body);
+  console.log("req.files=============",req.files);
+  
+  const { name, oldPrice, newPrice, viewOrder, status } = req.body;
+
+  if (!req.files || !req.files.image) {
+     return res.status(400).json({ message: 'No file uploaded' });
+  }
+
+  const image = req.files.image;
+  const finalName = name.replace(/\s+/g, '_');
+  const desImageDir = `${WallpaperPath}/${finalName}`;
+
+  if (!fs.existsSync(desImageDir)) {
+      fs.mkdirSync(desImageDir, { recursive: true });
+  }
+
+  const imageName = image.name.replace(/ /g, '_');
+  const originalImagePath = `${desImageDir}/${imageName}`;
+  fs.writeFileSync(originalImagePath, image.data);
+
+  // Create thumbnails directory if it doesn't exist
+  const thumbnailDir = `${WallpaperPath}/thumbnails`;
+  if (!fs.existsSync(thumbnailDir)) {
+      fs.mkdirSync(thumbnailDir, { recursive: true });
+  }
+
+  // Determine file extension and resize accordingly
+  const extension = path.extname(image.name).toLowerCase();
+  const thumbnailImagePath = `${thumbnailDir}/${path.basename(imageName, extension)}.webp`;
+  let pipeline;
+
+  if (extension === '.png' || extension === '.jpg' || extension === '.jpeg') {
+      pipeline = sharp(originalImagePath)
+          .resize({ width: 200, height: 200 })
+          .toFormat('webp')
+          .webp({ quality: 80 })
+          .toFile(thumbnailImagePath);
+  } else {
+      throw new Error('Unsupported file format');
+  }
+
+  await pipeline;
+
+  const destinationImgUrl = `https://salesman.aindriya.co.in/${URLpathI}/${finalName}/${imageName}`;
+  const thumbnailImgUrl = `https://salesman.aindriya.co.in/${URLpathI}/thumbnails/${path.basename(imageName, extension)}.webp`;
+console.log("destinationImgUrl--------",destinationImgUrl);
+console.log("thumbnailImgUrl------",thumbnailImgUrl)
+  
+  const wallpaper = new Wallpaper({
+      name,
+      oldPrice,
+      newPrice,
+      viewOrder,
+      status,
+      image: destinationImgUrl,
+      thumbnail: thumbnailImgUrl
+  });
+
+  await wallpaper.save();
+
+  res.status(201).json({ message: "Wallpaper created successfully", wallpaper });
+} catch (error) {
+  console.error(error);
+  res.status(500).json({ message: 'Internal server error' });
+}
+};
