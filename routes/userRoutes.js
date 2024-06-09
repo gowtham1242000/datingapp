@@ -32,6 +32,7 @@ router.post('/FreeCoin', userController.FreeCoin);
 router.post('/createCoinConversion', userController.createCoinConversion);
 router.post('/wallpaper',userController.wallpaper);
 router.post('/createframe', userController.createframe);
+router.post('/createGift', userController.createGift);
 // router.post('/testpayment', userController.testpayment);
 
 router.put('/updateUser/:userId', userController.updateUser);
@@ -41,6 +42,7 @@ router.put('/updateFreeCoin/:id', userController.updateFreeCoin);
 router.put('/updateCoinConversion', userController.updateCoinConversion);
 router.put('/updateWallpaper/:id', userController.updateWallpaper);
 router.put('/updateFrame/:id', userController.updateFrame);
+router.put('/updateGift', userController.updateGift);
 
 router.get('/getAllLanguages',userController.getAllLanguages);
 router.get('/searchByUsername', userController.searchByUsername);
@@ -51,6 +53,8 @@ router.get('/getWallpaper/:id', userController.getWallpaper);
 router.get('/getAllWallpaper', userController.getAllWallpaper);
 router.get('/getAllFrame', userController.getAllFrame);
 router.get('/getFrame/:id',userController.getFrame);
+router.get('/getAllGifts', userController.getAllGifts);
+router.get('/getGifts/:id',userController.getGifts);
 
 
 router.delete('/deleteLanguageById/:id', userController.deleteLanguageById);
@@ -58,6 +62,7 @@ router.delete('/deleteCoinPackage/:id', userController.deleteCoinPackage);
 router.delete('/deleteFreeCoin/:id', userController.deleteFreeCoin);
 router.delete('/deleteWallpaper/:id', userController.deleteWallpaper);
 router.delete('/deleteFrame', userController.deleteFrame);
+// router.delete('/deleteGift/:id', userController.deleteGift);
 // router.post('/login', userController.login);
 //router.get('/profile', authenticateJWT, userController.getProfile);
 //router.put('/profile', authenticateJWT, userController.updateProfile);

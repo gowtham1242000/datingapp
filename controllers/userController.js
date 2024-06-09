@@ -6,6 +6,7 @@ const FreeCoin = require('../models/FreeCoin');
 const CoinConversion =require('../models/CoinConversion');
 const Wallpaper = require('../models/Wallpaper');
 const Frame = require('../models/Frame');
+const Gift = require('../models/GiftList');
 
 
 const jwt = require('jsonwebtoken');
@@ -26,6 +27,8 @@ const WallpaperPath = '/etc/ec/data';
 const URLpathI = 'wallpapers';
 const framePath = '/etc/ec/data';
 const URLpathF = 'frames';
+const giftPath ='/etc/ec/data';
+const URLpathG = 'gifts';
 
 
 
@@ -946,4 +949,146 @@ exports.createframe = async(req,res) =>{
   
 
 
+  exports.createGift =async(req,res) =>{
+    try {
+      console.log("req.body==============",req.body);
+      console.log("req.files=============",req.files);
+      
+      
+      const { giftName, oldPrice, newPrice, viewOrder, status } = req.body;
+    
+      if (!req.files || !req.files.image) {
+         return res.status(400).json({ message: 'No file uploaded' });
+      }
+    
+      const image = req.files.image;
+      const finalName = giftName.replace(/\s+/g, '_');
+      const desImageDir = `${giftPath}/${finalName}`;
+    
+      if (!fs.existsSync(desImageDir)) {
+          fs.mkdirSync(desImageDir, { recursive: true });
+      }
+    
+      const imageName = image.name.replace(/ /g, '_');
+      const originalImagePath = `${desImageDir}/${imageName}`;
+      fs.writeFileSync(originalImagePath, image.data);
+    
+      // Create thumbnails directory if it doesn't exist
+      const thumbnailDir = `${giftPath}/thumbnails`;
+      if (!fs.existsSync(thumbnailDir)) {
+          fs.mkdirSync(thumbnailDir, { recursive: true });
+      }
+    
+      // Determine file extension and resize accordingly
+      const extension = path.extname(image.name).toLowerCase();
+      const thumbnailImagePath = `${thumbnailDir}/${path.basename(imageName, extension)}.webp`;
+      let pipeline;
+    
+      if (extension === '.png' || extension === '.jpg' || extension === '.jpeg') {
+          pipeline = sharp(originalImagePath)
+              .resize({ width: 200, height: 200 })
+              .toFormat('webp')
+              .webp({ quality: 80 })
+              .toFile(thumbnailImagePath);
+      } else {
+          throw new Error('Unsupported file format');
+      }
+    
+      await pipeline;
+    
+      const destinationImgUrl = `https://salesman.aindriya.co.in/${URLpathG}/${finalName}/${imageName}`;
+      const thumbnailImgUrl = `https://salesman.aindriya.co.in/${URLpathG}/thumbnails/${path.basename(imageName, extension)}.webp`;
+    console.log("destinationImgUrl--------",destinationImgUrl);
+    console.log("thumbnailImgUrl------",thumbnailImgUrl)
+      
+      const gift = new Gift({
+          giftName,
+          oldPrice,
+          newPrice,
+          viewOrder,
+          status,
+          image: destinationImgUrl,
+          thumbnail: thumbnailImgUrl
+      });
+
+      console.log("gift------",gift)
+      // return
+    
+      await gift.save();
+    
+      res.status(201).json({ message: "Gift created successfully", gift });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+    };
   
+    exports.updateGift = async (req, res) => {
+      try {
+        const { giftName, oldPrice, newPrice, viewOrder, status } = req.body;
+        const giftId = req.params.id;
+    
+        // Check if the frame exists
+        const gift = await Gift.findById(frameId);
+        if (!gift) {
+          return res.status(404).json({ message: 'gift not found' });
+        }
+    
+        // Update the frame fields
+        gift.giftName = giftName || gift.giftName; // Update name if provided, otherwise keep the existing name
+        gift.oldPrice = oldPrice || gift.oldPrice;
+        gift.newPrice = newPrice || gift.newPrice;
+        gift.viewOrder = viewOrder || gift.viewOrder;
+        gift.status = status || gift.status;
+    
+        // Update the image field if a new image is provided
+        if (req.files && req.files.image) {
+          const image = req.files.image;
+          const imageName = image.name.replace(/ /g, '_');
+          const imagePath = `${giftPath}/${gift.giftName}/${imageName}`;
+    
+          // Save the new image
+          fs.writeFileSync(imagePath, image.data);
+          gift.image = `https://salesman.aindriya.co.in/${URLpathG}/${gift.giftName}/${imageName}`;
+        }
+    
+        // Save the updated wallpaper
+        await gift.save();
+    
+        res.status(200).json({ message: 'gift updated successfully', gift });
+      } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Internal server error' });
+      }
+    };
+  
+
+
+    exports.getGifts = async (req, res) => {
+      try {
+        const GiftId = req.params.id;
+    
+        // Find the wallpaper by ID
+        const gift = await Gift.findById(frameId);
+        if (!gift) {
+          return res.status(404).json({ message: 'Frame not found' });
+        }
+    
+        // Return the wallpaper
+        res.status(200).json({ gift });
+      } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Internal server error' });
+      }
+    };
+    
+    exports.getAllGifts = async (req, res) => {
+      try {
+        // Fetch all wallpapers sorted by viewOrder in ascending order
+        const AllGifts = await Gift.find().sort({ viewOrder: 1 });
+        res.status(200).json(AllGifts);
+      } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Internal Server Error' });
+      }
+    };
