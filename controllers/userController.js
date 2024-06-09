@@ -4,6 +4,10 @@ const Language = require('../models/Language');
 const CoinPackage = require('../models/CoinPackage')
 const FreeCoin = require('../models/FreeCoin');
 const CoinConversion =require('../models/CoinConversion');
+const Wallpaper = require('../models/Wallpaper');
+const Frame = require('../models/Frame');
+
+
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const crypto = require('crypto');
@@ -14,12 +18,16 @@ const ms = require('ms');
 const sharp = require('sharp'); 
 const fs = require('fs-extra');
 //const path = require('path');
-const Wallpaper = require('../models/Wallpaper');
+
 const editJsonFile    = require('edit-json-file');
 const formidable = require('formidable');
 
 const WallpaperPath = '/etc/ec/data';
 const URLpathI = 'wallpapers';
+const framePath = '/etc/ec/data';
+const URLpathF = 'frames';
+
+
 
 require("dotenv").config();
 
@@ -733,14 +741,16 @@ exports.getWallpaper = async (req, res) => {
   }
 };
 
-exports.getAllWallpaper=async(req,res)=>{
-  try{
-    const AllWallpaper =await Wallpaper.find();
-    res.status(200).json(AllWallpaper)
-  }catch(error){
-    res.status(500).json({message:'Internal Server Error'})
+exports.getAllWallpaper = async (req, res) => {
+  try {
+    // Fetch all wallpapers sorted by viewOrder in ascending order
+    const AllWallpaper = await Wallpaper.find().sort({ viewOrder: 1 });
+    res.status(200).json(AllWallpaper);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
   }
-}
+};
 
 exports.deleteWallpaper = async (req, res) => {
   try {
@@ -768,3 +778,172 @@ exports.deleteWallpaper = async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 };
+
+exports.createframe = async(req,res) =>{
+  try {
+    console.log("req.body==============",req.body);
+    console.log("req.files=============",req.files);
+    
+    const { name, oldPrice, newPrice, viewOrder, status } = req.body;
+  
+    if (!req.files || !req.files.image) {
+       return res.status(400).json({ message: 'No file uploaded' });
+    }
+  
+    const image = req.files.image;
+    const finalName = name.replace(/\s+/g, '_');
+    const desImageDir = `${framePath}/${finalName}`;
+  
+    if (!fs.existsSync(desImageDir)) {
+        fs.mkdirSync(desImageDir, { recursive: true });
+    }
+  
+    const imageName = image.name.replace(/ /g, '_');
+    const originalImagePath = `${desImageDir}/${imageName}`;
+    fs.writeFileSync(originalImagePath, image.data);
+  
+    // Create thumbnails directory if it doesn't exist
+    const thumbnailDir = `${framePath}/thumbnails`;
+    if (!fs.existsSync(thumbnailDir)) {
+        fs.mkdirSync(thumbnailDir, { recursive: true });
+    }
+  
+    // Determine file extension and resize accordingly
+    const extension = path.extname(image.name).toLowerCase();
+    const thumbnailImagePath = `${thumbnailDir}/${path.basename(imageName, extension)}.webp`;
+    let pipeline;
+  
+    if (extension === '.png' || extension === '.jpg' || extension === '.jpeg') {
+        pipeline = sharp(originalImagePath)
+            .resize({ width: 200, height: 200 })
+            .toFormat('webp')
+            .webp({ quality: 80 })
+            .toFile(thumbnailImagePath);
+    } else {
+        throw new Error('Unsupported file format');
+    }
+  
+    await pipeline;
+  
+    const destinationImgUrl = `https://salesman.aindriya.co.in/${URLpathF}/${finalName}/${imageName}`;
+    const thumbnailImgUrl = `https://salesman.aindriya.co.in/${URLpathF}/thumbnails/${path.basename(imageName, extension)}.webp`;
+  console.log("destinationImgUrl--------",destinationImgUrl);
+  console.log("thumbnailImgUrl------",thumbnailImgUrl)
+    
+    const frame = new Frame({
+        name,
+        oldPrice,
+        newPrice,
+        viewOrder,
+        status,
+        image: destinationImgUrl,
+        thumbnail: thumbnailImgUrl
+    });
+  
+    await frame.save();
+  
+    res.status(201).json({ message: "Frame created successfully", frame });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+  };
+
+  exports.updateFrame = async (req, res) => {
+    try {
+      const { name, oldPrice, newPrice, viewOrder, status } = req.body;
+      const frameId = req.params.id;
+  
+      // Check if the frame exists
+      const frame = await Frame.findById(frameId);
+      if (!frame) {
+        return res.status(404).json({ message: 'frame not found' });
+      }
+  
+      // Update the frame fields
+      frame.name = name || frame.name; // Update name if provided, otherwise keep the existing name
+      frame.oldPrice = oldPrice || frame.oldPrice;
+      frame.newPrice = newPrice || frame.newPrice;
+      frame.viewOrder = viewOrder || frame.viewOrder;
+      frame.status = status || frame.status;
+  
+      // Update the image field if a new image is provided
+      if (req.files && req.files.image) {
+        const image = req.files.image;
+        const imageName = image.name.replace(/ /g, '_');
+        const imagePath = `${framePath}/${wallpaper.name}/${imageName}`;
+  
+        // Save the new image
+        fs.writeFileSync(imagePath, image.data);
+        frame.image = `https://salesman.aindriya.co.in/${URLpathF}/${frame.name}/${imageName}`;
+      }
+  
+      // Save the updated wallpaper
+      await frame.save();
+  
+      res.status(200).json({ message: 'Frame updated successfully', frame });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  };
+
+  exports.getFrame = async (req, res) => {
+    try {
+      const frameId = req.params.id;
+  
+      // Find the wallpaper by ID
+      const frame = await Frame.findById(frameId);
+      if (!frame) {
+        return res.status(404).json({ message: 'Frame not found' });
+      }
+  
+      // Return the wallpaper
+      res.status(200).json({ frame });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  };
+  
+  exports.getAllFrame = async (req, res) => {
+    try {
+      // Fetch all wallpapers sorted by viewOrder in ascending order
+      const AllFrame = await Frame.find().sort({ viewOrder: 1 });
+      res.status(200).json(AllFrame);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: 'Internal Server Error' });
+    }
+  };
+  
+  exports.deleteFrame = async (req, res) => {
+    try {
+      const frameId = req.params.id;
+  
+      // Find the frame by ID
+      const frame = await Wallpaper.findById(frameId);
+      if (!frame) {
+        return res.status(404).json({ message: 'Frame not found' });
+      }
+  
+      // Delete the frame
+      await Frame.deleteOne({ _id: frameId });
+  
+      // Delete the associated image files (if any)
+      const imageDir = `${framePath}/${frame.name}`;
+      if (fs.existsSync(imageDir)) {
+        fs.rmdirSync(imageDir, { recursive: true });
+      }
+  
+      // Return success response
+      res.status(200).json({ message: 'Frame deleted successfully' });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  };
+  
+
+
+  

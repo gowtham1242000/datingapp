@@ -31,6 +31,8 @@ router.post('/createCoinPackage', userController.createCoinPackage);
 router.post('/FreeCoin', userController.FreeCoin);
 router.post('/createCoinConversion', userController.createCoinConversion);
 router.post('/wallpaper',userController.wallpaper);
+router.post('/createframe', userController.createframe);
+// router.post('/testpayment', userController.testpayment);
 
 router.put('/updateUser/:userId', userController.updateUser);
 router.put('/updateLanguageById/:id', userController.updateLanguageById);
@@ -38,6 +40,7 @@ router.put('/updateCoinPackage/:id', userController.updateCoinPackage);
 router.put('/updateFreeCoin/:id', userController.updateFreeCoin);
 router.put('/updateCoinConversion', userController.updateCoinConversion);
 router.put('/updateWallpaper/:id', userController.updateWallpaper);
+router.put('/updateFrame/:id', userController.updateFrame);
 
 router.get('/getAllLanguages',userController.getAllLanguages);
 router.get('/searchByUsername', userController.searchByUsername);
@@ -46,12 +49,15 @@ router.get('/getFreeCoin', userController.getFreeCoin);
 router.get('/getCoinConversion', userController.getCoinConversion);
 router.get('/getWallpaper/:id', userController.getWallpaper);
 router.get('/getAllWallpaper', userController.getAllWallpaper);
+router.get('/getAllFrame', userController.getAllFrame);
+router.get('/getFrame/:id',userController.getFrame);
 
 
 router.delete('/deleteLanguageById/:id', userController.deleteLanguageById);
 router.delete('/deleteCoinPackage/:id', userController.deleteCoinPackage);
 router.delete('/deleteFreeCoin/:id', userController.deleteFreeCoin);
 router.delete('/deleteWallpaper/:id', userController.deleteWallpaper);
+router.delete('/deleteFrame', userController.deleteFrame);
 // router.post('/login', userController.login);
 //router.get('/profile', authenticateJWT, userController.getProfile);
 //router.put('/profile', authenticateJWT, userController.updateProfile);
