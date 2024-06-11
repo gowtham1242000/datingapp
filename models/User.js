@@ -1,15 +1,12 @@
 const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
-
   mobileNumber: { type: String, required: true, unique: true },
   otp: {
-    code: String,
-    expiresAt: Date
+    code: { type: Number, required: true },
+    expiresAt: { type: Date, required: true }
   },
-  //password: { type: String, required: true },
   profile: {
     age: Number,
     gender: String,
@@ -19,14 +16,12 @@ const userSchema = new mongoose.Schema({
     coin: Number,
     avatar: String
   },
-},
-{ timestamps: true });
-
+}, { timestamps: true });
 
 // Method to generate OTP
 userSchema.methods.generateOTP = function() {
-  const otp = crypto.randomInt(100000, 999999).toString(); // Generates a 6-digit OTP
-  const expiresAt = new Date(Date.now() + 1 * 60 * 1000); // OTP valid for 10 minutes
+  const otp = Math.floor(100000 + Math.random() * 900000); // Generates a 6-digit OTP as a number
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // OTP valid for 10 minutes
   this.otp = { code: otp, expiresAt };
   return otp;
 };
@@ -36,7 +31,7 @@ userSchema.methods.verifyOTP = function(candidateOTP) {
   if (!this.otp || !this.otp.expiresAt || this.otp.expiresAt < Date.now()) {
     return false; // OTP expired or not set
   }
-  return this.otp.code === candidateOTP;
+  return this.otp.code === parseInt(candidateOTP, 10); // Ensure candidateOTP is compared as a number
 };
 
 const User = mongoose.model('User', userSchema);

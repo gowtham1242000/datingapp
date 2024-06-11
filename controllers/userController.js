@@ -162,6 +162,72 @@ exports.deleteLanguageById = async (req, res) => {
   }
 };
 
+/*
+exports.userRequestOTP = async (req, res) => {
+  try {
+    const { mobileNumber } = req.body;
+    let user = await User.findOne({ mobileNumber });
+
+    if (!user) {
+      user = new User({ mobileNumber, username: `user_${mobileNumber}` });
+    }
+
+    const response = await axios.get(`http://2factor.in/API/V1/9e880f4a-7dc5-11ec-b9b5-0200cd936042/SMS/${mobileNumber}/AUTOGEN2`);
+    console.log("response----------", response.data);
+    const otp = response.data.Details; // Assuming the OTP is in the 'Details' field of the response
+
+    // Update the user's OTP fields
+    user.otp = {
+      code: parseInt(otp, 10), // Ensure OTP is stored as a number
+      expiresAt: new Date(Date.now() + 1 * 60 * 1000) // OTP valid for 1 minute
+    };
+
+    await user.save();
+
+    res.status(200).send({ message: 'OTP sent successfully' });
+  } catch (error) {
+    console.log(error);
+    res.status(400).send({ error: error.message });
+  }
+};
+
+exports.userVerifyOTP = async (req, res) => {
+  console.log("req.body-------",req.body)
+	try {
+    const { mobileNumber, otp } = req.body;
+    console.log("otp--------",otp)
+
+    // Find user by mobile number
+    const user = await User.findOne({ mobileNumber: mobileNumber });
+    console.log("user-------", user)
+
+    if (!user) {
+      return res.status(404).json({ message: 'Mobile number not found' });
+    }
+
+    // Log OTP details
+    console.log("Stored OTP code:", user.otp.code);
+    console.log("Stored OTP expiresAt:", user.otp.expiresAt);
+    console.log("Current time:", new Date());
+    console.log("Provided OTP:", otp);
+
+    // Use the verifyOTP method
+    const isOTPValid = user.verifyOTP(otp);
+    console.log("user.verifyOTP(otp)----------outside the condition", isOTPValid);
+
+    if (isOTPValid) {
+      return res.status(200).json({ message: 'OTP verified successfully' });
+    } else {
+      return res.status(400).json({ message: 'Invalid OTP or expired' });
+  
+    }
+  } catch (error) {
+    console.error('Error verifying OTP:', error);
+    res.status(500).json({ message: 'Internal server error',error });
+  }
+};
+*/
+
 exports.userRequestOTP = async (req, res) => {
   try {
     const { mobileNumber } = req.body;
@@ -172,9 +238,12 @@ exports.userRequestOTP = async (req, res) => {
       user = new User({ mobileNumber, username: `user_${mobileNumber}` });
     }
 
+    // Make the request to the OTP service
     const response = await axios.get(`http://2factor.in/API/V1/9e880f4a-7dc5-11ec-b9b5-0200cd936042/SMS/${mobileNumber}/AUTOGEN2`);
     console.log("response----------", response.data);
-    const otp = response.data.OTP; // Assuming the OTP is in the 'Details' field of the response
+    
+    // Extract the OTP from the response and convert it to a number
+    const otp = parseInt(response.data.OTP, 10); // Ensure OTP is a number
 
     // Update the user's OTP fields
     user.otp = {
@@ -192,29 +261,36 @@ exports.userRequestOTP = async (req, res) => {
 };
 
 exports.userVerifyOTP = async (req, res) => {
-  console.log("req.body-------",req.body)
+  console.log("req.body-------", req.body);
   try {
-    const { mobileNumber, otp } = req.body;
+    const { mobileNumber, otp } = req.body; // Correct the variable name to `mobileNumber`
+
     const user = await User.findOne({ mobileNumber });
-    console.log("user-------",user);
-   
+    console.log("user-------", user);
 
     if (!user) {
-      return res.status(404).send({ error: 'User not found' });
+      return res.status(404).json({ message: 'Mobile number not found' });
     }
 
-    if (!user.verifyOTP(otp)) {
-      return res.status(401).send({ error: 'Invalid or expired OTP' });
+    console.log("Stored OTP code:", user.otp.code);
+    console.log("Stored OTP expiresAt:", user.otp.expiresAt);
+    console.log("Current time:", new Date());
+    console.log("Provided OTP:", otp);
+
+    const isOTPValid = user.verifyOTP(otp);
+    console.log("user.verifyOTP(otp)----------outside the condition", isOTPValid);
+
+    if (isOTPValid) {
+      return res.status(200).json({ message: 'OTP verified successfully',user });
+    } else {
+      return res.status(400).json({ message: 'Invalid OTP or expired' });
     }
-
-    //const token = jwt.sign({ userId: user._id }, 'your_jwt_secret', { expiresIn: '1h' });
-
-    res.status(200).send({ message: 'OTP verified successfully',user });
   } catch (error) {
-    console.log(error);
-    res.status(400).send({ error: error.message });
+    console.error('Error verifying OTP:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 };
+
 
 exports.createUser = async (req,res) => {
   console.log("------------------",req.body)
