@@ -35,6 +35,8 @@ router.post('/createframe', userController.createframe);
 router.post('/createGift', userController.createGift);
 // router.post('/testpayment', userController.testpayment);
 router.post('/createAvatar', userController.createAvatar);
+router.post('/createCategory', userController.createCategory);
+
 
 router.put('/updateUser/:userId', userController.updateUser);
 router.put('/updateLanguageById/:id', userController.updateLanguageById);
@@ -58,17 +60,23 @@ router.get('/getAllGifts', userController.getAllGifts);
 router.get('/getGifts/:id',userController.getGifts);
 router.get('/getAvatar', userController.getAvatar);
 router.get('/getAvatarById/:id', userController.getAvatarById);
+router.get('/getAllCategories', userController.getAllCategories);
+router.get('/getCategoryById/:id', userController.getCategoryById);
 
 router.delete('/deleteLanguageById/:id', userController.deleteLanguageById);
 router.delete('/deleteCoinPackage/:id', userController.deleteCoinPackage);
 router.delete('/deleteFreeCoin/:id', userController.deleteFreeCoin);
 router.delete('/deleteWallpaper/:id', userController.deleteWallpaper);
 router.delete('/deleteFrame', userController.deleteFrame);
+router.delete('/deleteCategoryById/:id', userController.deleteCategoryById);
 // router.delete('/deleteGift/:id', userController.deleteGift);
 // router.post('/login', userController.login);
 //router.get('/profile', authenticateJWT, userController.getProfile);
 //router.put('/profile', authenticateJWT, userController.updateProfile);
+
+
 router.get('/getUsers', userController.getUsers);
+
 
 router.post('/payment', userController.newPayment)
 module.exports = router;

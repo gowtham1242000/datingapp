@@ -8,7 +8,7 @@ const Wallpaper = require('../models/Wallpaper');
 const Frame = require('../models/Frame');
 const Gift = require('../models/GiftList');
 const Avatar = require('../models/Avatar');
-
+const Category = require('../models/Category');
 
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
@@ -1376,4 +1376,59 @@ exports.getAvatarById = async (req, res) => {
         console.error("Error fetching avatar by ID:", error);
         res.status(500).json({ message: 'Internal server error' });
     }
+};
+
+
+exports.createCategory = async (req, res) => {
+  console.log("req.body-------", req.body);
+  try {
+    const { name } = req.body;
+    const category = new Category({ name });
+    console.log("category----", category);
+    await category.save();
+    res.status(201).json({ message: 'Category created successfully', category });
+  } catch (error) {
+    console.error('Error creating category:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+// Other CRUD operations
+exports.getAllCategories = async (req, res) => {
+  try {
+    const categories = await Category.find();
+    res.status(200).json(categories);
+  } catch (error) {
+    console.error('Error fetching categories:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+exports.getCategoryById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const category = await Category.findById(id);
+    if (!category) {
+      return res.status(404).json({ message: 'Category not found' });
+    }
+    res.status(200).json(category);
+  } catch (error) {
+    console.error('Error fetching category:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+
+exports.deleteCategoryById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const category = await Category.findByIdAndDelete(id);
+    if (!category) {
+      return res.status(404).json({ message: 'Category not found' });
+    }
+    res.status(200).json({ message: 'Category deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting category:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
 };
