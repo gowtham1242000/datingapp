@@ -34,6 +34,7 @@ router.post('/wallpaper',userController.wallpaper);
 router.post('/createframe', userController.createframe);
 router.post('/createGift', userController.createGift);
 // router.post('/testpayment', userController.testpayment);
+router.post('/createAvatar', userController.createAvatar);
 
 router.put('/updateUser/:userId', userController.updateUser);
 router.put('/updateLanguageById/:id', userController.updateLanguageById);
@@ -55,7 +56,8 @@ router.get('/getAllFrame', userController.getAllFrame);
 router.get('/getFrame/:id',userController.getFrame);
 router.get('/getAllGifts', userController.getAllGifts);
 router.get('/getGifts/:id',userController.getGifts);
-
+router.get('/getAvatar', userController.getAvatar);
+router.get('/getAvatarById/:id', userController.getAvatarById);
 
 router.delete('/deleteLanguageById/:id', userController.deleteLanguageById);
 router.delete('/deleteCoinPackage/:id', userController.deleteCoinPackage);

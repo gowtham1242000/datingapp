@@ -7,6 +7,7 @@ const CoinConversion =require('../models/CoinConversion');
 const Wallpaper = require('../models/Wallpaper');
 const Frame = require('../models/Frame');
 const Gift = require('../models/GiftList');
+const Avatar = require('../models/Avatar');
 
 
 const jwt = require('jsonwebtoken');
@@ -29,6 +30,9 @@ const framePath = '/etc/ec/data';
 const URLpathF = 'frames';
 const giftPath ='/etc/ec/data';
 const URLpathG = 'gifts';
+
+const AvatarPath = '/etc/ec/data'; // Update with your directory path
+const URLpathA = 'avatar'; // Update with your URL path
 
 
 
@@ -232,8 +236,10 @@ exports.userRequestOTP = async (req, res) => {
   try {
     const { mobileNumber } = req.body;
     let user = await User.findOne({ mobileNumber });
-
-    if (!user) {
+    let isExistingUser = false; // Flag to indicate existing user
+    if (user) {
+	isExistingUser = true; // Set the flag if user exists
+    }else{
       // Provide a default username
       user = new User({ mobileNumber, username: `user_${mobileNumber}` });
     }
@@ -253,7 +259,7 @@ exports.userRequestOTP = async (req, res) => {
 
     await user.save();
 
-    res.status(200).send({ message: 'OTP sent successfully' });
+    res.status(200).send({ message: 'OTP sent successfully',isExistingUser });
   } catch (error) {
     console.log(error);
     res.status(400).send({ error: error.message });
@@ -263,10 +269,10 @@ exports.userRequestOTP = async (req, res) => {
 exports.userVerifyOTP = async (req, res) => {
   console.log("req.body-------", req.body);
   try {
-    const { mobileNumber, otp } = req.body; // Correct the variable name to `mobileNumber`
+    const { mobileNumber, otp } = req.body;
 
+    // Check if the user exists
     const user = await User.findOne({ mobileNumber });
-    console.log("user-------", user);
 
     if (!user) {
       return res.status(404).json({ message: 'Mobile number not found' });
@@ -277,11 +283,15 @@ exports.userVerifyOTP = async (req, res) => {
     console.log("Current time:", new Date());
     console.log("Provided OTP:", otp);
 
+    // Verify the OTP
     const isOTPValid = user.verifyOTP(otp);
     console.log("user.verifyOTP(otp)----------outside the condition", isOTPValid);
 
+    // Determine if the user is already registered based on mobileNumber existence
+    const isExistingUser = user.mobileNumber ? true : false;
+
     if (isOTPValid) {
-      return res.status(200).json({ message: 'OTP verified successfully',user });
+      return res.status(200).json({ message: 'OTP verified successfully', isExistingUser, user });
     } else {
       return res.status(400).json({ message: 'Invalid OTP or expired' });
     }
@@ -290,6 +300,7 @@ exports.userVerifyOTP = async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 };
+
 
 
 exports.createUser = async (req,res) => {
@@ -1168,3 +1179,201 @@ exports.createframe = async(req,res) =>{
         res.status(500).json({ message: 'Internal Server Error' });
       }
     };
+
+
+
+/*exports.createAvatar = async (req, res) => {
+    try {
+	if (!req.files || !req.files.image) {
+     return res.status(400).json({ message: 'No file uploaded' });
+  }
+
+  const image = req.files.image;
+console.log("image--------",image)
+  const finalName = image.name.replace(/\s+/g, '_');
+  const desImageDir = `${AvatarPath}/${finalName}`;
+
+  if (!fs.existsSync(desImageDir)) {
+      fs.mkdirSync(desImageDir, { recursive: true });
+  }
+
+  const imageName = image.name.replace(/ /g, '_');
+console.log("imageName-------",imageName)
+  const originalImagePath = `${desImageDir}/${imageName}`;
+  fs.writeFileSync(originalImagePath, image.data);
+console.log("originImagePath---------",originalImagePath);
+  // Create thumbnails directory if it doesn't exist
+  const thumbnailDir = `${AvatarPath}/thumbnails`;
+  if (!fs.existsSync(thumbnailDir)) {
+      fs.mkdirSync(thumbnailDir, { recursive: true });
+  }
+
+console.log("image----------",image)
+
+  // Determine file extension and resize accordingly
+  const extension = path.extname(image.name).toLowerCase();
+console.log("extension--------",extension)
+  const thumbnailImagePath = `${thumbnailDir}/${path.basename(imageName, extension)}.webp`;
+  let pipeline;
+  if (extension === '.png' || extension === '.jpg' || extension === '.jpeg') {
+      pipeline = sharp(originalImagePath)
+          .resize({ width: 200, height: 200 })
+          .toFormat('webp')
+          .webp({ quality: 80 })
+          .toFile(thumbnailImagePath);
+  } else {
+      throw new Error('Unsupported file format');
+  }
+
+  await pipeline;
+
+  const destinationImgUrl = `https://salesman.aindriya.co.in/${URLpathA}/original/${imageName}`;
+  const thumbnailImgUrl = `https://salesman.aindriya.co.in/${URLpathA}/thumbnails/${path.basename(imageName, extension)}.webp`;
+console.log("destinationImgUrl--------",destinationImgUrl);
+console.log("thumbnailImgUrl------",thumbnailImgUrl)
+	const avatar = new Avatar({ image:destinationImgUrl, thumbnailImg:thumbnailImgUrl})
+	await avatar.save();
+
+  res.status(201).json({ message: "Wallpaper created successfully", avatar });
+
+
+    } catch (error) {
+        res.status(400).json({ message: error.message });
+    }
+};
+*/
+
+/*exports.createAvatar = async (req, res) => {
+    try {
+        if (!req.files || !req.files.image) {
+            return res.status(400).json({ message: 'No file uploaded' });
+        }
+
+        const image = req.files.image;
+        const finalName = image.name.replace(/\s+/g, '_');
+
+        // Directory for original images
+        const originalDir = `${AvatarPath}/original`;
+        if (!fs.existsSync(originalDir)) {
+            fs.mkdirSync(originalDir, { recursive: true });
+        }
+
+        // Save original image
+        const originalImagePath = `${originalDir}/${finalName}`;
+        fs.writeFileSync(originalImagePath, image.data);
+
+        // Directory for thumbnails
+        const thumbnailDir = `${AvatarPath}/thumbnails`;
+        if (!fs.existsSync(thumbnailDir)) {
+            fs.mkdirSync(thumbnailDir, { recursive: true });
+        }
+
+        // Determine file extension
+        const extension = path.extname(finalName).toLowerCase();
+
+        // Resize and save thumbnail image
+        const thumbnailImagePath = `${thumbnailDir}/${path.basename(finalName, extension)}.webp`;
+        await sharp(originalImagePath)
+            .resize({ width: 200, height: 200 })
+            .toFormat('webp')
+            .webp({ quality: 80 })
+            .toFile(thumbnailImagePath);
+
+        // Image URLs
+        const destinationImgUrl = `https://salesman.aindriya.co.in/URLpathA/original/${finalName}`;
+        const thumbnailImgUrl = `https://salesman.aindriya.co.in/URLpathA/thumbnails/${path.basename(finalName, extension)}.webp`;
+
+        // Save avatar data to database
+        const avatar = new Avatar({ image: destinationImgUrl, thumbnailImg: thumbnailImgUrl });
+        await avatar.save();
+
+        res.status(201).json({ message: "Avatar created successfully", avatar });
+    } catch (error) {
+        res.status(400).json({ message: error.message });
+    }
+};*/
+
+exports.createAvatar = async (req, res) => {
+    try {
+        if (!req.files || !req.files.image) {
+            return res.status(400).json({ message: 'No file uploaded' });
+        }
+
+        const image = req.files.image;
+        const finalName = image.name.replace(/\s+/g, '_');
+
+        // Directory for avatar images
+        const avatarDir = `${AvatarPath}/avatar`;
+        if (!fs.existsSync(avatarDir)) {
+            fs.mkdirSync(avatarDir, { recursive: true });
+        }
+
+        // Directory for original images
+        const originalDir = `${avatarDir}/original`;
+        if (!fs.existsSync(originalDir)) {
+            fs.mkdirSync(originalDir, { recursive: true });
+        }
+
+        // Save original image
+        const originalImagePath = `${originalDir}/${finalName}`;
+        fs.writeFileSync(originalImagePath, image.data);
+
+        // Directory for thumbnails
+        const thumbnailDir = `${avatarDir}/thumbnails`;
+        if (!fs.existsSync(thumbnailDir)) {
+            fs.mkdirSync(thumbnailDir, { recursive: true });
+        }
+
+        // Determine file extension
+        const extension = path.extname(finalName).toLowerCase();
+
+        // Resize and save thumbnail image
+        const thumbnailImagePath = `${thumbnailDir}/${path.basename(finalName, extension)}.webp`;
+        await sharp(originalImagePath)
+            .resize({ width: 200, height: 200 })
+            .toFormat('webp')
+            .webp({ quality: 80 })
+            .toFile(thumbnailImagePath);
+
+        // Image URLs
+        const destinationImgUrl = `https://salesman.aindriya.co.in/avatar/original/${finalName}`;
+        const thumbnailImgUrl = `https://salesman.aindriya.co.in/avatar/thumbnails/${path.basename(finalName, extension)}.webp`;
+
+        // Save avatar data to database
+        const avatar = new Avatar({ image: destinationImgUrl, thumbnailImg: thumbnailImgUrl });
+        await avatar.save();
+
+        res.status(201).json({ message: "Avatar created successfully", avatar });
+    } catch (error) {
+        res.status(400).json({ message: error.message });
+    }
+};
+
+
+
+exports.getAvatar = async (req, res) => {
+    try {
+        const avatars = await Avatar.find();
+        res.status(200).json(avatars);
+    } catch (error) {
+        console.error("Error fetching avatars:", error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+
+
+exports.getAvatarById = async (req, res) => {
+    try {
+        const avatarId = req.params.id; // Assuming the ID is passed as a route parameter
+        const avatar = await Avatar.findById(avatarId);
+        
+        if (!avatar) {
+            return res.status(404).json({ message: 'Avatar not found' });
+        }
+        
+        res.status(200).json(avatar);
+    } catch (error) {
+        console.error("Error fetching avatar by ID:", error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
