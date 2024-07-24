@@ -9,7 +9,8 @@ const Frame = require('../models/Frame');
 const Gift = require('../models/GiftList');
 const Avatar = require('../models/Avatar');
 const Category = require('../models/Category');
-
+const Banner =  require('../models/Banner');
+const Mood = require('../models/Mood');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const crypto = require('crypto');
@@ -30,7 +31,10 @@ const framePath = '/etc/ec/data';
 const URLpathF = 'frames';
 const giftPath ='/etc/ec/data';
 const URLpathG = 'gifts';
-
+const bannerPath = '/etc/ec/data'; // Adjust the path as necessary
+const URLpathB = 'banners'; // Adjust the path as necessar
+const moodPath = '/etc/ec/data';
+const URLpathM = 'moods';
 const AvatarPath = '/etc/ec/data'; // Update with your directory path
 const URLpathA = 'avatar'; // Update with your URL path
 
@@ -235,6 +239,8 @@ exports.userVerifyOTP = async (req, res) => {
 exports.userRequestOTP = async (req, res) => {
   try {
     const { mobileNumber } = req.body;
+console.log("mobileNumber----------",req.body);
+//return
     let user = await User.findOne({ mobileNumber });
     let isExistingUser = false; // Flag to indicate existing user
     if (user) {
@@ -363,6 +369,7 @@ console.log("coin",coin);
   }
 };
 
+/*
 exports.getUsers =async(req,res)=>{
   try{
     const user = await User.find();
@@ -372,6 +379,25 @@ exports.getUsers =async(req,res)=>{
     res.status(500).json({message:'Internal Server Error'})
   }
 }
+*/
+
+exports.getUsers = async (req, res) => {
+  try {
+    const users = await User.find();
+
+    // Remove the otp field from each user object
+    const sanitizedUsers = users.map(user => {
+      const { otp, ...sanitizedUser } = user.toObject();
+      return sanitizedUser;
+    });
+
+    res.status(200).json(sanitizedUsers);
+  } catch (error) {
+    console.log("error------", error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+}
+
 
 exports.searchByUsername = async (req, res) => {
   try {
@@ -1426,9 +1452,227 @@ exports.deleteCategoryById = async (req, res) => {
     if (!category) {
       return res.status(404).json({ message: 'Category not found' });
     }
+
     res.status(200).json({ message: 'Category deleted successfully' });
   } catch (error) {
     console.error('Error deleting category:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };
+
+exports.getProfile =async (req,res)=>{
+try {
+    const userId = req.params.id;
+
+    // Validate the user ID format
+ //   if (!mongoose.Types.ObjectId.isValid(userId)) {
+   //   return res.status(400).json({ message: 'Invalid user ID format' });
+    //}
+
+    // Find the user by ID
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Respond with the user profile
+    res.status(200).json({ userProfile: user.profile });
+  } catch (error) {
+    console.error('Error retrieving user profile:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+exports.createBanner = async(req,res)=>{
+try {
+    console.log("req.body==============",req.body);
+    console.log("req.files=============",req.files);
+    
+    const { viewingOrder, status } = req.body;
+  
+    if (!req.files || !req.files.image) {
+       return res.status(400).json({ message: 'No file uploaded' });
+    }
+  
+    const image = req.files.image;
+    const name = 'banner';
+    const finalName = name.replace(/\s+/g, '_');
+    const desImageDir = `${framePath}/${finalName}`;
+  
+    if (!fs.existsSync(desImageDir)) {
+        fs.mkdirSync(desImageDir, { recursive: true });
+    }
+  
+    const imageName = image.name.replace(/ /g, '_');
+    const originalImagePath = `${desImageDir}/${imageName}`;
+    fs.writeFileSync(originalImagePath, image.data);
+  
+    // Create thumbnails directory if it doesn't exist
+    const thumbnailDir = `${framePath}/thumbnails`;
+    if (!fs.existsSync(thumbnailDir)) {
+        fs.mkdirSync(thumbnailDir, { recursive: true });
+    }
+  
+    // Determine file extension and resize accordingly
+    const extension = path.extname(image.name).toLowerCase();
+    const thumbnailImagePath = `${thumbnailDir}/${path.basename(imageName, extension)}.webp`;
+    let pipeline;
+  
+    if (extension === '.png' || extension === '.jpg' || extension === '.jpeg') {
+        pipeline = sharp(originalImagePath)
+            .resize({ width: 200, height: 200 })
+            .toFormat('webp')
+            .webp({ quality: 80 })
+            .toFile(thumbnailImagePath);
+    } else {
+        throw new Error('Unsupported file format');
+    }
+  
+    await pipeline;
+  
+    const destinationImgUrl = `https://salesman.aindriya.co.in/${finalName}/${imageName}`;
+    const thumbnailImgUrl = `https://salesman.aindriya.co.in/${URLpathB}/thumbnails/${path.basename(imageName, extension)}.webp`;
+  console.log("destinationImgUrl--------",destinationImgUrl);
+  console.log("thumbnailImgUrl------",thumbnailImgUrl)
+    
+    const banner = new Banner({
+        viewingOrder,
+        status,
+        image: destinationImgUrl,
+       // thumbnail: thumbnailImgUrl
+    });
+  
+    await banner.save();
+  
+    res.status(201).json({ message: "Banner created successfully", banner });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+
+
+ exports.getAllBanner = async (req, res) => {
+    try {
+      // Fetch all wallpapers sorted by viewOrder in ascending order
+      const AllBanner = await Banner.find().sort({ viewingOrder: 1 });
+      res.status(200).json(AllBanner);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: 'Internal Server Error' });
+    }
+  };
+
+exports.getBannerById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const banner = await Banner.findById(id);
+    if (!banner) {
+      return res.status(404).json({ message: 'Banner  not found' });
+    }
+    res.status(200).json(banner);
+  } catch (error) {
+    console.error('Error fetching category:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+exports.createMood = async (req, res) => {
+  try {
+    console.log("req.body==============", req.body);
+    console.log("req.files=============", req.files);
+
+    const { moodName, order, status } = req.body;
+
+    if (!req.files || !req.files.image) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    const image = req.files.image;
+    const finalName = moodName.replace(/\s+/g, '_');
+
+    // Directory for the mood images
+    const desImageDir = `${moodPath}/${URLpathM}/${finalName}`;
+    if (!fs.existsSync(desImageDir)) {
+      fs.mkdirSync(desImageDir, { recursive: true });
+      console.log(`Mood directory created: ${desImageDir}`);
+    }
+
+    // Save original image
+    const imageName = image.name.replace(/ /g, '_');
+    const originalImagePath = `${desImageDir}/${imageName}`;
+    fs.writeFileSync(originalImagePath, image.data);
+    console.log(`Original image saved: ${originalImagePath}`);
+
+    // Directory for thumbnails
+    const thumbnailDir = `${desImageDir}/thumbnails`;
+    if (!fs.existsSync(thumbnailDir)) {
+      fs.mkdirSync(thumbnailDir, { recursive: true });
+      console.log(`Thumbnail directory created: ${thumbnailDir}`);
+    }
+
+    // Determine file extension
+    const extension = path.extname(imageName).toLowerCase();
+
+    // Resize and save thumbnail image
+    const thumbnailImagePath = `${thumbnailDir}/${path.basename(imageName, extension)}.webp`;
+    await sharp(originalImagePath)
+      .resize({ width: 200, height: 200 })
+      .toFormat('webp')
+      .webp({ quality: 80 })
+      .toFile(thumbnailImagePath);
+    console.log(`Thumbnail image saved: ${thumbnailImagePath}`);
+
+    // URLs for accessing the images
+    const destinationImgUrl = `https://salesman.aindriya.co.in/${URLpathM}/${finalName}/${imageName}`;
+    //const thumbnailImgUrl = `https://salesman.aindriya.co.in/${URLpathM}/${finalName}/thumbnails/${path.basename(imageName, extension)}.webp`;
+
+    console.log("destinationImgUrl--------", destinationImgUrl);
+    //console.log("thumbnailImgUrl------", thumbnailImgUrl);
+
+    // Save mood data to the database
+    const mood = new Mood({
+      moodName,
+      order,
+      status,
+      image: destinationImgUrl,
+  //    thumbnail: thumbnailImgUrl
+    });
+
+    await mood.save();
+
+    res.status(201).json({ message: "Mood created successfully", mood });
+  } catch (error) {
+    console.error("Error:", error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+
+ exports.getAllMood = async (req, res) => {
+    try {
+      // Fetch all wallpapers sorted by viewOrder in ascending order
+      const Allmood = await Mood.find().sort({ order: 1 });
+      res.status(200).json(Allmood);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: 'Internal Server Error' });
+    }
+  };
+
+exports.getMoodById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const mood = await Mood.findById(id);
+    if (!mood) {
+      return res.status(404).json({ message: 'mood  not found' });
+    }
+    res.status(200).json(mood);
+  } catch (error) {
+    console.error('Error fetching category:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+

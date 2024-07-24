@@ -17,17 +17,18 @@ const { TextDecoder } = require('util');
 let TextDecoderFatal = new TextDecoder('utf8', { fatal: true });
 
 const app = express();
+app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({
   extended: true
 }))
 app.use(bodyParser.json());
 app.set('view engine', 'ejs');
-
+require('dotenv').config();
 app.use(fileUpload());
 
 app.use('/api/users', userRoutes);
 
-const PORT = process.env.PORT || ( "0.0.0.0" , 3000) ;
+const PORT = process.env.PORT || ( "0.0.0.0" , 8000) ;
 
 const allowedOrigins = ['http://localhost:5174'];
 app.use(cors());

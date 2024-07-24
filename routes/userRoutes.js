@@ -36,7 +36,8 @@ router.post('/createGift', userController.createGift);
 // router.post('/testpayment', userController.testpayment);
 router.post('/createAvatar', userController.createAvatar);
 router.post('/createCategory', userController.createCategory);
-
+router.post('/createBanner', userController.createBanner);
+router.post('/createMood', userController.createMood);
 
 router.put('/updateUser/:userId', userController.updateUser);
 router.put('/updateLanguageById/:id', userController.updateLanguageById);
@@ -62,6 +63,11 @@ router.get('/getAvatar', userController.getAvatar);
 router.get('/getAvatarById/:id', userController.getAvatarById);
 router.get('/getAllCategories', userController.getAllCategories);
 router.get('/getCategoryById/:id', userController.getCategoryById);
+router.get('/getProfile/:id', userController.getProfile);
+router.get('/getAllBanner', userController.getAllBanner);
+router.get('/getBannerById/:id', userController.getBannerById);
+router.get('/getAllMood', userController.getAllMood);
+router.get('/getMoodById/:id', userController.getMoodById);
 
 router.delete('/deleteLanguageById/:id', userController.deleteLanguageById);
 router.delete('/deleteCoinPackage/:id', userController.deleteCoinPackage);
