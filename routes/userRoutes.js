@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
 const jwt = require('jsonwebtoken');
+const Wallet = require('../models/Wallet');
 
 
 // Middleware to authenticate JWT
@@ -80,9 +81,19 @@ router.delete('/deleteCategoryById/:id', userController.deleteCategoryById);
 //router.get('/profile', authenticateJWT, userController.getProfile);
 //router.put('/profile', authenticateJWT, userController.updateProfile);
 
+router.post('/getToken', userController.getToken);
 
 router.get('/getUsers', userController.getUsers);
 
 
+// Wallet
+router.post('/createWallet', userController.createWallet);
+router.get('/getWallet/:userId', userController.getWallet);
+router.post('/addFunds', userController.addFunds);
+router.post('/deductFunds', userController.deductFunds);
+router.get('/getTransactionHistory/:userId', userController.getTransactionHistory);
+
 router.post('/payment', userController.newPayment)
+
+
 module.exports = router;

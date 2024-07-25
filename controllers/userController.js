@@ -11,6 +11,8 @@ const Avatar = require('../models/Avatar');
 const Category = require('../models/Category');
 const Banner =  require('../models/Banner');
 const Mood = require('../models/Mood');
+const Wallet = require('../models/Wallet');
+const Transaction = require('../models/Transaction');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const crypto = require('crypto');
@@ -20,6 +22,11 @@ const path = require('path');
 const ms = require('ms');
 const sharp = require('sharp'); 
 const fs = require('fs-extra');
+const { RtcTokenBuilder, RtcRole } = require('agora-access-token');
+
+
+const APP_ID = 'd742dcece1d14193a708b6e41ef2c336';
+const APP_CERTIFICATE = 'e38cfd43cedd4ca1b84589ef98aa979b';
 //const path = require('path');
 
 const editJsonFile    = require('edit-json-file');
@@ -42,8 +49,26 @@ const URLpathA = 'avatar'; // Update with your URL path
 
 require("dotenv").config();
 
+exports.getToken = async (req,res)=>{
+  try{
+const { channelName, uid } = req.body;
 
+  if (!channelName || !uid) {
+    return res.status(400).json({ message: 'channelName and uid are required' });
+  }
 
+  const role = RtcRole.PUBLISHER;
+  const expirationTimeInSeconds = 3600;
+  const currentTimestamp = Math.floor(Date.now() / 1000);
+  const privilegeExpiredTs = currentTimestamp + expirationTimeInSeconds;
+
+  const token = RtcTokenBuilder.buildTokenWithUid(APP_ID, APP_CERTIFICATE, channelName, uid, role, privilegeExpiredTs);
+
+  res.json({ token });
+}catch(error){
+  res.status(500).json('Internal server Error',error)
+}
+};
 
 exports.registerAdmin = async (req, res) => {
   try{
@@ -337,7 +362,9 @@ exports.createUser = async (req,res) => {
 exports.updateUser = async (req, res) => {
   try {
     const id = req.params.userId;
-    const { username, dateOfBirth, language, place, gender, avatar, coin, blocklist } = req.body;
+    const { username, dateOfBirth, language, place, gender, avatar, coin, blocklist, myMood } = req.body;
+
+    console.log("-----------",myMood)
 
     // Check if user exists
     const existingUser = await User.findById(id);
@@ -346,7 +373,6 @@ exports.updateUser = async (req, res) => {
     if (!existingUser) {
       return res.status(404).json({ message: 'User not found' });
     }
-console.log("coin",coin);
 
     // Update user details
     if (username) existingUser.profile.username = username;
@@ -356,13 +382,24 @@ console.log("coin",coin);
     if (gender) existingUser.profile.gender = gender;
     if (avatar) existingUser.profile.avatar = avatar;
     if (coin) existingUser.profile.coin = coin;
+    if (myMood) {
+      try {
+        const mood = await Mood.findById(myMood);
+        if (!mood) {
+          return res.status(404).json({ message: 'Mood Not Found' });
+        }
+        existingUser.profile.myMood = mood.moodName;
+      } catch (error) {
+        return res.status(500).json({ message: 'Error fetching mood', error });
+      }
+    }
     if (blocklist) existingUser.profile.blocklist =blocklist
     //existingUser.
 
     // Save updated user details
     await existingUser.save();
 
-    res.status(200).json({ message: 'User details updated successfully' });
+    res.status(200).json({ message: 'User details updated successfully',existingUser });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Internal Server Error' });
@@ -1664,15 +1701,117 @@ exports.createMood = async (req, res) => {
 
 exports.getMoodById = async (req, res) => {
   try {
-    const { id } = req.params;
-    const mood = await Mood.findById(id);
-    if (!mood) {
-      return res.status(404).json({ message: 'mood  not found' });
+        const { userId } = req.body;
+
+        // Check if the user already has a wallet
+        const existingWallet = await Wallet.findOne({ userId });
+        if (existingWallet) {
+            return res.status(400).json({ message: 'Wallet already exists for this user.' });
+        }
+
+        const wallet = new Wallet({ userId });
+        await wallet.save();
+        res.status(201).json(wallet);
+    } catch (error) {
+        res.status(500).json({ message: 'Error creating wallet', error });
     }
-    res.status(200).json(mood);
-  } catch (error) {
-    console.error('Error fetching category:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
 };
 
+exports.createWallet =async (req,res)=>{
+  try {
+    const { userId } = req.body;
+
+    // Check if the user already has a wallet
+    const existingWallet = await Wallet.findOne({ userId });
+    if (existingWallet) {
+        return res.status(400).json({ message: 'Wallet already exists for this user.' });
+    }
+
+    const wallet = new Wallet({ userId });
+    await wallet.save();
+    res.status(201).json(wallet);
+} catch (error) {
+    res.status(500).json({ message: 'Error creating wallet', error });
+}
+}
+
+exports.getWallet= async (req,res)=>{
+  try {
+    const { userId } = req.params;
+    const wallet = await Wallet.findOne({ userId });
+    if (!wallet) {
+        return res.status(404).json({ message: 'Wallet not found.' });
+    }
+    res.status(200).json(wallet);
+} catch (error) {
+    res.status(500).json({ message: 'Error fetching wallet', error });
+}
+}
+
+exports.addFunds = async (req,res)=>{
+  try {
+    const { userId, amount } = req.body;
+
+    const wallet = await Wallet.findOne({ userId });
+    if (!wallet) {
+        return res.status(404).json({ message: 'Wallet not found.' });
+    }
+
+    wallet.balance += amount;
+    wallet.updatedAt = Date.now();
+    await wallet.save();
+
+    const transaction = new Transaction({
+        userId,
+        type: 'credit',
+        amount,
+        balanceAfter: wallet.balance
+    });
+    await transaction.save();
+
+    res.status(200).json(wallet);
+} catch (error) {
+    res.status(500).json({ message: 'Error adding funds', error });
+}
+}
+
+exports.deductFunds = async (req,res)=>{
+  try {
+    const { userId, amount } = req.body;
+
+    const wallet = await Wallet.findOne({ userId });
+    if (!wallet) {
+        return res.status(404).json({ message: 'Wallet not found.' });
+    }
+
+    if (wallet.balance < amount) {
+        return res.status(400).json({ message: 'Insufficient balance.' });
+    }
+
+    wallet.balance -= amount;
+    wallet.updatedAt = Date.now();
+    await wallet.save();
+
+    const transaction = new Transaction({
+        userId,
+        type: 'debit',
+        amount,
+        balanceAfter: wallet.balance
+    });
+    await transaction.save();
+
+    res.status(200).json(wallet);
+} catch (error) {
+    res.status(500).json({ message: 'Error deducting funds', error });
+}
+}
+
+exports.getTransactionHistory= async (req,res)=>{
+  try {
+    const { userId } = req.params;
+    const transactions = await Transaction.find({ userId }).sort({ createdAt: -1 });
+    res.status(200).json(transactions);
+} catch (error) {
+    res.status(500).json({ message: 'Error fetching transaction history', error });
+}
+}

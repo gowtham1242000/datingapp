@@ -13,7 +13,12 @@ const userSchema = new mongoose.Schema({
     dateOfBirth: Date,
     language: String,
     place: String,
-    coin: Number,
+    myMood: String,
+    pointsEarned: { type: Number, default: 0 },
+    walletBalance: { type: Number, default: 0 },
+    heartBalance: { type: Number, default: 0 },
+    coin: { type: Number, default: 0 },
+    gifts: { type: Number, default: 0 },
     avatar: String
   },
 }, { timestamps: true });
