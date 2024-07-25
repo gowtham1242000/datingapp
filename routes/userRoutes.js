@@ -95,5 +95,11 @@ router.get('/getTransactionHistory/:userId', userController.getTransactionHistor
 
 router.post('/payment', userController.newPayment)
 
+//Follow and unFollow
+
+router.post('/followUser', userController.followUser);
+router.post('/unfollowUser', userController.unfollowUser);
+router.get('/getFollowers/:userId', userController.getFollowers);
+router.get('/getFollowing/:userId', userController.getFollowing);
 
 module.exports = router;

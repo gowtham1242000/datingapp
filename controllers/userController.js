@@ -13,6 +13,7 @@ const Banner =  require('../models/Banner');
 const Mood = require('../models/Mood');
 const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
+const Follow = require('../models/Follow');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const crypto = require('crypto');
@@ -1825,3 +1826,66 @@ exports.getTransactionHistory= async (req,res)=>{
     res.status(500).json({ message: 'Error fetching transaction history', error });
 }
 }
+
+exports.followUser = async (req, res) => {
+  try {
+      const { followerId, followingId } = req.body;
+
+      // Check if the follow relationship already exists
+      const existingFollow = await Follow.findOne({ followerId, followingId });
+      if (existingFollow) {
+          return res.status(400).json({ message: 'You are already following this user.' });
+      }
+
+      const follow = new Follow({ followerId, followingId });
+      await follow.save();
+      res.status(201).json(follow);
+  } catch (error) {
+    console.log("error------",error);
+      res.status(500).json({ message: 'Error following user', error });
+  }
+};
+
+// Unfollow a user
+exports.unfollowUser = async (req, res) => {
+  try {
+      const { followerId, followingId } = req.body;
+
+      // Check if the follow relationship exists
+      const follow = await Follow.findOne({ followerId, followingId });
+      if (!follow) {
+          return res.status(400).json({ message: 'You are not following this user.' });
+      }
+
+      await Follow.deleteOne({ followerId, followingId });
+      res.status(200).json({ message: 'Successfully unfollowed the user.' });
+  } catch (error) {
+      res.status(500).json({ message: 'Error unfollowing user', error });
+  }
+};
+
+// Get followers of a user
+exports.getFollowers = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const followers = await Follow.find({ followingId: userId }).populate('followerId', 'username');
+    const followerCount = await Follow.countDocuments({ followingId: userId });
+
+    res.status(200).json({ followers, followerCount });
+} catch (error) {
+    res.status(500).json({ message: 'Error fetching followers', error });
+}
+};
+
+// Get following of a user
+exports.getFollowing = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const following = await Follow.find({ followerId: userId }).populate('followingId', 'username');
+    const followingCount = await Follow.countDocuments({ followerId: userId });
+
+    res.status(200).json({ following, followingCount });
+} catch (error) {
+    res.status(500).json({ message: 'Error fetching following', error });
+}
+};
