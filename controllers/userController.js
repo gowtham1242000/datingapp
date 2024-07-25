@@ -1713,21 +1713,17 @@ exports.createMood = async (req, res) => {
   };
 
 exports.getMoodById = async (req, res) => {
-  try {
-        const { userId } = req.body;
-
-        // Check if the user already has a wallet
-        const existingWallet = await Wallet.findOne({ userId });
-        if (existingWallet) {
-            return res.status(400).json({ message: 'Wallet already exists for this user.' });
-        }
-
-        const wallet = new Wallet({ userId });
-        await wallet.save();
-        res.status(201).json(wallet);
-    } catch (error) {
-        res.status(500).json({ message: 'Error creating wallet', error });
+	try {
+    const { id } = req.params;
+    const mood = await Mood.findById(id);
+    if (!mood) {
+      return res.status(404).json({ message: 'mood  not found' });
     }
+    res.status(200).json(mood);
+  } catch (error) {
+    console.error('Error fetching category:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
 };
 
 exports.createWallet =async (req,res)=>{
