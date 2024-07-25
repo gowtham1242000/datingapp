@@ -767,115 +767,129 @@ exports.updateCoinConversion =async (req, res) =>{
   }
 }
 exports.wallpaper = async(req,res) =>{
-try {
-  console.log("req.body==============",req.body);
-  console.log("req.files=============",req.files);
-  
-  const { name, oldPrice, newPrice, viewOrder, status } = req.body;
-
-  if (!req.files || !req.files.image) {
-     return res.status(400).json({ message: 'No file uploaded' });
-  }
-
-  const image = req.files.image;
-  const finalName = name.replace(/\s+/g, '_');
-  const desImageDir = `${WallpaperPath}/${finalName}`;
-
-  if (!fs.existsSync(desImageDir)) {
-      fs.mkdirSync(desImageDir, { recursive: true });
-  }
-
-  const imageName = image.name.replace(/ /g, '_');
-  const originalImagePath = `${desImageDir}/${imageName}`;
-  fs.writeFileSync(originalImagePath, image.data);
-
-  // Create thumbnails directory if it doesn't exist
-  const thumbnailDir = `${WallpaperPath}/thumbnails`;
-  if (!fs.existsSync(thumbnailDir)) {
-      fs.mkdirSync(thumbnailDir, { recursive: true });
-  }
-
-  // Determine file extension and resize accordingly
-  const extension = path.extname(image.name).toLowerCase();
-  const thumbnailImagePath = `${thumbnailDir}/${path.basename(imageName, extension)}.webp`;
-  let pipeline;
-
-  if (extension === '.png' || extension === '.jpg' || extension === '.jpeg') {
-      pipeline = sharp(originalImagePath)
-          .resize({ width: 200, height: 200 })
-          .toFormat('webp')
-          .webp({ quality: 80 })
-          .toFile(thumbnailImagePath);
-  } else {
-      throw new Error('Unsupported file format');
-  }
-
-  await pipeline;
-
-  const destinationImgUrl = `https://salesman.aindriya.co.in/${URLpathI}/${finalName}/${imageName}`;
-  const thumbnailImgUrl = `https://salesman.aindriya.co.in/${URLpathI}/thumbnails/${path.basename(imageName, extension)}.webp`;
-console.log("destinationImgUrl--------",destinationImgUrl);
-console.log("thumbnailImgUrl------",thumbnailImgUrl)
-  
-  const wallpaper = new Wallpaper({
-      name,
-      oldPrice,
-      newPrice,
-      viewOrder,
-      status,
-      image: destinationImgUrl,
-      thumbnail: thumbnailImgUrl
-  });
-
-  await wallpaper.save();
-
-  res.status(201).json({ message: "Wallpaper created successfully", wallpaper });
-} catch (error) {
-  console.error(error);
-  res.status(500).json({ message: 'Internal server error' });
-}
-};
-
-
-exports.updateWallpaper = async (req, res) => {
   try {
+    console.log("req.body==============",req.body);
+    console.log("req.files=============",req.files);
+  
     const { name, oldPrice, newPrice, viewOrder, status } = req.body;
-    const wallpaperId = req.params.id;
-
-    // Check if the wallpaper exists
-    const wallpaper = await Wallpaper.findById(wallpaperId);
-    if (!wallpaper) {
-      return res.status(404).json({ message: 'Wallpaper not found' });
+  
+    if (!req.files || !req.files.image) {
+       return res.status(400).json({ message: 'No file uploaded' });
     }
-
-    // Update the wallpaper fields
-    wallpaper.name = name || wallpaper.name; // Update name if provided, otherwise keep the existing name
-    wallpaper.oldPrice = oldPrice || wallpaper.oldPrice;
-    wallpaper.newPrice = newPrice || wallpaper.newPrice;
-    wallpaper.viewOrder = viewOrder || wallpaper.viewOrder;
-    wallpaper.status = status || wallpaper.status;
-
-    // Update the image field if a new image is provided
-    if (req.files && req.files.image) {
-      const image = req.files.image;
-      const imageName = image.name.replace(/ /g, '_');
-      const imagePath = `${WallpaperPath}/${wallpaper.name}/${imageName}`;
-
-      // Save the new image
-      fs.writeFileSync(imagePath, image.data);
-      wallpaper.image = `https://salesman.aindriya.co.in/${URLpathI}/${wallpaper.name}/${imageName}`;
+  
+    const image = req.files.image;
+    const finalName = name.replace(/\s+/g, '_');
+    const desImageDir = `${WallpaperPath}/${URLpathI}/${finalName}`;
+  
+    if (!fs.existsSync(desImageDir)) {
+        fs.mkdirSync(desImageDir, { recursive: true });
     }
-
-    // Save the updated wallpaper
+  
+    const imageName = image.name.replace(/ /g, '_');
+    const originalImagePath = `${desImageDir}/${imageName}`;
+    fs.writeFileSync(originalImagePath, image.data);
+  
+    // Create thumbnails directory if it doesn't exist
+    const thumbnailDir = `${WallpaperPath}/thumbnails`;
+    if (!fs.existsSync(thumbnailDir)) {
+        fs.mkdirSync(thumbnailDir, { recursive: true });
+    }
+  
+    // Determine file extension and resize accordingly
+    const extension = path.extname(image.name).toLowerCase();
+    const thumbnailImagePath = `${thumbnailDir}/${path.basename(imageName, extension)}.webp`;
+    let pipeline;
+  
+    if (extension === '.png' || extension === '.jpg' || extension === '.jpeg') {
+        pipeline = sharp(originalImagePath)
+            .resize({ width: 200, height: 200 })
+            .toFormat('webp')
+            .webp({ quality: 80 })
+            .toFile(thumbnailImagePath);
+    } else {
+        throw new Error('Unsupported file format');
+    }
+  
+    await pipeline;
+    const destinationImgUrl = `https://salesman.aindriya.co.in/${URLpathI}/${finalName}/${imageName}`;
+    const thumbnailImgUrl = `https://salesman.aindriya.co.in/${URLpathI}/thumbnails/${path.basename(imageName, extension)}.webp`;
+  console.log("destinationImgUrl--------",destinationImgUrl);
+  console.log("thumbnailImgUrl------",thumbnailImgUrl)
+  
+    const wallpaper = new Wallpaper({
+        name,
+        oldPrice,
+        newPrice,
+        viewOrder,
+        status,
+        image: destinationImgUrl,
+        thumbnail: thumbnailImgUrl
+    });
+  
     await wallpaper.save();
-
-    res.status(200).json({ message: 'Wallpaper updated successfully', wallpaper });
+  
+    res.status(201).json({ message: "Wallpaper created successfully", wallpaper });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Internal server error' });
   }
-};
+  };
+  
 
+  exports.updateWallpaper = async (req, res) => {
+    try {
+      const { name, oldPrice, newPrice, viewOrder, status } = req.body;
+      const wallpaperId = req.params.id;
+  
+      // Check if the wallpaper exists
+      const wallpaper = await Wallpaper.findById(wallpaperId);
+      if (!wallpaper) {
+        return res.status(404).json({ message: 'Wallpaper not found' });
+      }
+  
+      // Update the wallpaper fields
+      wallpaper.name = name || wallpaper.name; // Update name if provided, otherwise keep the existing name
+      wallpaper.oldPrice = oldPrice || wallpaper.oldPrice;
+      wallpaper.newPrice = newPrice || wallpaper.newPrice;
+      wallpaper.viewOrder = viewOrder || wallpaper.viewOrder;
+      wallpaper.status = status || wallpaper.status;
+  
+      // Update the image field if a new image is provided
+     /* if (req.files && req.files.image) {
+        const image = req.files.image;
+        const imageName = image.name.replace(/ /g, '_');
+        const imagePath = `${WallpaperPath}/${wallpaper.name}/${imageName}`;
+  
+        // Save the new image
+        fs.writeFileSync(imagePath, image.data);
+        wallpaper.image = `https://salesman.aindriya.co.in/${URLpathI}/${wallpaper.name}/${imageName}`;
+      }*/
+  if (req.files && req.files.image) {
+    const image = req.files.image;
+    const imageName = image.name.replace(/ /g, '_');
+    const imagePath = `${WallpaperPath}/${URLpathI}/${wallpaper.name}/${imageName}`;
+    const imageDir = path.dirname(imagePath);
+  
+    // Create the directory path if it doesn't exist
+    if (!fs.existsSync(imageDir)) {
+      fs.mkdirSync(imageDir, { recursive: true });
+    }
+  
+    // Save the new image
+    fs.writeFileSync(imagePath, image.data);
+    wallpaper.image = `https://salesman.aindriya.co.in/${URLpathI}/${wallpaper.name}/${imageName}`;
+  }
+  
+      // Save the updated wallpaper
+      await wallpaper.save();
+  
+      res.status(200).json({ message: 'Wallpaper updated successfully', wallpaper });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  };
+  
 exports.getWallpaper = async (req, res) => {
   try {
     const wallpaperId = req.params.id;
@@ -1103,37 +1117,37 @@ exports.createframe = async(req,res) =>{
     try {
       console.log("req.body==============",req.body);
       console.log("req.files=============",req.files);
-      
-      
+
+
       const { giftName, oldPrice, newPrice, viewOrder, status } = req.body;
-    
+
       if (!req.files || !req.files.image) {
          return res.status(400).json({ message: 'No file uploaded' });
       }
-    
+
       const image = req.files.image;
       const finalName = giftName.replace(/\s+/g, '_');
-      const desImageDir = `${giftPath}/${finalName}`;
-    
+      const desImageDir = `${giftPath}/${URLpathG}/${finalName}`;
+
       if (!fs.existsSync(desImageDir)) {
           fs.mkdirSync(desImageDir, { recursive: true });
       }
-    
+
       const imageName = image.name.replace(/ /g, '_');
       const originalImagePath = `${desImageDir}/${imageName}`;
       fs.writeFileSync(originalImagePath, image.data);
-    
+
       // Create thumbnails directory if it doesn't exist
       const thumbnailDir = `${giftPath}/thumbnails`;
       if (!fs.existsSync(thumbnailDir)) {
           fs.mkdirSync(thumbnailDir, { recursive: true });
       }
-    
+
       // Determine file extension and resize accordingly
       const extension = path.extname(image.name).toLowerCase();
       const thumbnailImagePath = `${thumbnailDir}/${path.basename(imageName, extension)}.webp`;
       let pipeline;
-    
+
       if (extension === '.png' || extension === '.jpg' || extension === '.jpeg') {
           pipeline = sharp(originalImagePath)
               .resize({ width: 200, height: 200 })
@@ -1143,14 +1157,13 @@ exports.createframe = async(req,res) =>{
       } else {
           throw new Error('Unsupported file format');
       }
-    
       await pipeline;
-    
+
       const destinationImgUrl = `https://salesman.aindriya.co.in/${URLpathG}/${finalName}/${imageName}`;
       const thumbnailImgUrl = `https://salesman.aindriya.co.in/${URLpathG}/thumbnails/${path.basename(imageName, extension)}.webp`;
     console.log("destinationImgUrl--------",destinationImgUrl);
     console.log("thumbnailImgUrl------",thumbnailImgUrl)
-      
+
       const gift = new Gift({
           giftName,
           oldPrice,
@@ -1163,9 +1176,9 @@ exports.createframe = async(req,res) =>{
 
       console.log("gift------",gift)
       // return
-    
+
       await gift.save();
-    
+
       res.status(201).json({ message: "Gift created successfully", gift });
     } catch (error) {
       console.error(error);
