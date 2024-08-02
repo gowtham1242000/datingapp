@@ -1830,7 +1830,7 @@ exports.getTransactionHistory= async (req,res)=>{
 exports.followUser = async (req, res) => {
   try {
       const { followerId, followingId } = req.body;
-
+console.log("req.body--------",req.body);
       // Check if the follow relationship already exists
       const existingFollow = await Follow.findOne({ followerId, followingId });
       if (existingFollow) {
@@ -1839,7 +1839,7 @@ exports.followUser = async (req, res) => {
 
       const follow = new Follow({ followerId, followingId });
       await follow.save();
-      res.status(201).json(follow);
+      res.status(201).json({ message:'User Followed successfully',follow});
   } catch (error) {
     console.log("error------",error);
       res.status(500).json({ message: 'Error following user', error });
@@ -1868,24 +1868,96 @@ exports.unfollowUser = async (req, res) => {
 exports.getFollowers = async (req, res) => {
   try {
     const { userId } = req.params;
-    const followers = await Follow.find({ followingId: userId }).populate('followerId', 'username');
-    const followerCount = await Follow.countDocuments({ followingId: userId });
 
-    res.status(200).json({ followers, followerCount });
-} catch (error) {
+    // Fetch the followers with their user IDs
+    const follows = await Follow.find({ followingId: userId }).select('followerId');
+
+    // Extract the follower IDs from the result
+    const followerIds = follows.map(follow => follow.followerId);
+
+    // Fetch detailed information for each follower from the User table
+    const users = await User.find({ _id: { $in: followerIds } }).select('username profile.avatar');
+
+    // Get the logged-in user's followings
+    const loggedInUserFollows = await Follow.find({ followerId: userId }).select('followingId');
+
+    // Create a set of IDs that the logged-in user is following
+    const followingIds = new Set(loggedInUserFollows.map(follow => follow.followingId.toString()));
+
+    // Fetch the followers count for each follower
+    const followersCountsPromises = followerIds.map(async (followerId) => {
+      const count = await Follow.countDocuments({ followingId: followerId });
+      return { followerId, count };
+    });
+
+    const followersCounts = await Promise.all(followersCountsPromises);
+
+    // Add the `isFollowing` flag and followers count to each user
+    const followersWithFlag = users.map(user => {
+      const followerCount = followersCounts.find(count => count.followerId.toString() === user._id.toString()).count;
+      return {
+        username: user.username,
+        avatarImage: user.profile.avatar,
+        isFollowing: followingIds.has(user._id.toString()), // Check if the logged-in user follows this user
+        followersCount: followerCount, // Add followers count for this follower
+      };
+    });
+
+    // Count the total number of followers
+    const followerCount = followersWithFlag.length;
+
+    res.status(200).json({ followers: followersWithFlag, followerCount });
+  } catch (error) {
     res.status(500).json({ message: 'Error fetching followers', error });
-}
+  }
+
 };
 
 // Get following of a user
 exports.getFollowing = async (req, res) => {
   try {
     const { userId } = req.params;
-    const following = await Follow.find({ followerId: userId }).populate('followingId', 'username');
-    const followingCount = await Follow.countDocuments({ followerId: userId });
 
-    res.status(200).json({ following, followingCount });
-} catch (error) {
+    // Fetch the following list with their user IDs
+    const follows = await Follow.find({ followerId: userId }).select('followingId');
+
+    // Extract the following IDs from the result
+    const followingIds = follows.map(follow => follow.followingId);
+
+    // Fetch detailed information for each following user from the User table
+    const users = await User.find({ _id: { $in: followingIds } }).select('username profile.avatar');
+
+    // Get the logged-in user’s followings
+    const loggedInUserFollows = await Follow.find({ followerId: userId }).select('followingId');
+
+    // Create a set of IDs that the logged-in user is following
+    const followingIdsSet = new Set(loggedInUserFollows.map(follow => follow.followingId.toString()));
+
+    // Fetch the followers count for each user being followed
+    const followersCountsPromises = followingIds.map(async (followingId) => {
+      const count = await Follow.countDocuments({ followingId });
+      return { followingId, count };
+    });
+
+    const followersCounts = await Promise.all(followersCountsPromises);
+
+    // Add the `isFollowing` flag and followers count to each user
+    const followingWithDetails = users.map(user => {
+      const followersCount = followersCounts.find(count => count.followingId.toString() === user._id.toString()).count;
+      return {
+        username: user.username,
+        avatarImage: user.profile.avatar,
+        isFollowing: followingIdsSet.has(user._id.toString()), // Check if the logged-in user follows this user
+        followersCount: followersCount, // Add followers count for this user
+      };
+    });
+
+    // Count the total number of following
+    const followingCount = followingWithDetails.length;
+
+    res.status(200).json({ following: followingWithDetails, followingCount });
+  } catch (error) {
     res.status(500).json({ message: 'Error fetching following', error });
-}
+  }
 };
+
