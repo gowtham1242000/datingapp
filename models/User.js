@@ -14,6 +14,7 @@ const userSchema = new mongoose.Schema({
     language: String,
     place: String,
     myMood: String,
+    moodName: String,
     pointsEarned: { type: Number, default: 0 },
     walletBalance: { type: Number, default: 0 },
     heartBalance: { type: Number, default: 0 },

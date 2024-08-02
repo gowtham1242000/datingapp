@@ -69,6 +69,7 @@ router.get('/getAllBanner', userController.getAllBanner);
 router.get('/getBannerById/:id', userController.getBannerById);
 router.get('/getAllMood', userController.getAllMood);
 router.get('/getMoodById/:id', userController.getMoodById);
+router.get('/getUserDetailById/:userId', userController.getUserDetailById);
 
 router.delete('/deleteLanguageById/:id', userController.deleteLanguageById);
 router.delete('/deleteCoinPackage/:id', userController.deleteCoinPackage);
@@ -101,5 +102,12 @@ router.post('/followUser', userController.followUser);
 router.post('/unfollowUser', userController.unfollowUser);
 router.get('/getFollowers/:userId', userController.getFollowers);
 router.get('/getFollowing/:userId', userController.getFollowing);
+
+//OnetoOne
+
+router.post('/userOneVsOneList', userController.userOneVsOneList);
+router.get('/getUserOneVsOneList', userController.getUserOneVsOneList);
+
+router.post('/blockUser', userController.blockUser);
 
 module.exports = router;

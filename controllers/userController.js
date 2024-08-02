@@ -14,6 +14,8 @@ const Mood = require('../models/Mood');
 const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
 const Follow = require('../models/Follow');
+const Block = require('../models/BlockUser');
+const UserOneVsOneList = require('../models/userOneVsOneListSchema');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const crypto = require('crypto');
@@ -362,12 +364,16 @@ exports.createUser = async (req,res) => {
 }
 
 exports.updateUser = async (req, res) => {
+console.log("req.body-------------",req.body);
   try {
     const id = req.params.userId;
+console.log("req.params.userId-------------",req.params.userId)
     const { username, dateOfBirth, language, place, gender, avatar, coin, blocklist, myMood } = req.body;
 
-    console.log("-----------",myMood)
 
+console.log("req.body-------",req.body.myMood)
+    //console.log("-----------",myMood)
+console.log("id-------------",id)
     // Check if user exists
     const existingUser = await User.findById(id);
     console.log("existingUser-------",existingUser)
@@ -377,20 +383,37 @@ exports.updateUser = async (req, res) => {
     }
 
     // Update user details
-    if (username) existingUser.profile.username = username;
-    if (dateOfBirth) existingUser.profile.dateOfBirth = dateOfBirth;
-    if (language) existingUser.profile.language = language;
-    if (place) existingUser.profile.place = place;
-    if (gender) existingUser.profile.gender = gender;
-    if (avatar) existingUser.profile.avatar = avatar;
-    if (coin) existingUser.profile.coin = coin;
+    if (username){ existingUser.username = username;}
+    if (dateOfBirth) {existingUser.profile.dateOfBirth = dateOfBirth;}
+    if (language) {existingUser.profile.language = language;}
+    if (place) {existingUser.profile.place = place;}
+    if (gender) {existingUser.profile.gender = gender;}
+    //if (avatar) existingUser.profile.avatar = avatar;
+    if (coin) {existingUser.profile.coin = coin;}
+   if (avatar) {
+      try {
+        const avatarRecord = await Avatar.findById(avatar);
+        if (!avatarRecord) {
+          return res.status(404).json({ message: 'Avatar not found' });
+        }
+        existingUser.profile.avatar = avatarRecord.image;
+      } catch (error) {
+        return res.status(500).json({ message: 'Error fetching avatar', error });
+      }
+    }
+
     if (myMood) {
+console.log("-------------entering the flow  ----")
       try {
         const mood = await Mood.findById(myMood);
+console.log("mood---------",mood)
         if (!mood) {
           return res.status(404).json({ message: 'Mood Not Found' });
         }
-        existingUser.profile.myMood = mood.moodName;
+console.log("mood.image----------",mood.image)
+console.log("mood.mood--------",mood.moodName)
+        existingUser.profile.myMood = mood.image;
+        existingUser.profile.moodName = mood.moodName;
       } catch (error) {
         return res.status(500).json({ message: 'Error fetching mood', error });
       }
@@ -403,7 +426,7 @@ exports.updateUser = async (req, res) => {
 
     res.status(200).json({ message: 'User details updated successfully',existingUser });
   } catch (error) {
-    console.error(error);
+    console.error("--------------error---------",error);
     res.status(500).json({ message: 'Internal Server Error' });
   }
 };
@@ -1513,7 +1536,7 @@ exports.deleteCategoryById = async (req, res) => {
 };
 
 exports.getProfile =async (req,res)=>{
-try {
+/*try {
     const userId = req.params.id;
 
     // Validate the user ID format
@@ -1530,6 +1553,37 @@ try {
 
     // Respond with the user profile
     res.status(200).json({ userProfile: user.profile });
+  } catch (error) {
+    console.error('Error retrieving user profile:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }*/
+
+try {
+    const userId = req.params.id;
+
+    // Validate the user ID format
+//    if (!mongoose.Types.ObjectId.isValid(userId)) {
+  //    return res.status(400).json({ message: 'Invalid user ID format' });
+   // }
+
+    // Find the user by ID
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Count the number of followers and followings
+    const followersCount = await Follow.countDocuments({ followingId: userId });
+    const followingsCount = await Follow.countDocuments({ followerId: userId });
+
+    // Respond with the user profile and follow counts
+    res.status(200).json({
+      userName: user.username,
+      userProfile: user.profile,
+      followersCount,
+      followingsCount
+    });
   } catch (error) {
     console.error('Error retrieving user profile:', error);
     res.status(500).json({ message: 'Internal server error' });
@@ -1833,11 +1887,13 @@ exports.followUser = async (req, res) => {
 console.log("req.body--------",req.body);
       // Check if the follow relationship already exists
       const existingFollow = await Follow.findOne({ followerId, followingId });
+console.log("existingFollow---------",existingFollow)
       if (existingFollow) {
           return res.status(400).json({ message: 'You are already following this user.' });
       }
 
       const follow = new Follow({ followerId, followingId });
+console.log("follow---------",follow);
       await follow.save();
       res.status(201).json({ message:'User Followed successfully',follow});
   } catch (error) {
@@ -1863,7 +1919,54 @@ exports.unfollowUser = async (req, res) => {
       res.status(500).json({ message: 'Error unfollowing user', error });
   }
 };
+exports.getFollowers = async (req, res) => {
+  try {
+    const { userId } = req.params;
 
+    // Fetch the followers with their user IDs
+    const follows = await Follow.find({ followingId: userId }).select('followerId');
+
+    // Extract the follower IDs from the result
+    const followerIds = follows.map(follow => follow.followerId);
+
+    // Fetch detailed information for each follower from the User table
+    const users = await User.find({ _id: { $in: followerIds } }).select('username profile.avatar');
+
+    // Get the logged-in user's followings
+    const loggedInUserFollows = await Follow.find({ followerId: userId }).select('followingId');
+
+    // Create a set of IDs that the logged-in user is following
+    const followingIds = new Set(loggedInUserFollows.map(follow => follow.followingId.toString()));
+
+    // Fetch the followers count for each follower
+    const followersCountsPromises = followerIds.map(async (followerId) => {
+      const count = await Follow.countDocuments({ followingId: followerId });
+      return { followerId, count };
+    });
+
+    const followersCounts = await Promise.all(followersCountsPromises);
+
+    // Add the `isFollowing` flag and followers count to each user
+    const followersWithFlag = users.map(user => {
+      const followerCount = followersCounts.find(count => count.followerId.toString() === user._id.toString()).count;
+      return {
+        username: user.username,
+        avatarImage: user.profile.avatar,
+        isFollowing: followingIds.has(user._id.toString()), // Check if the logged-in user follows this user
+        followersCount: followerCount, // Add followers count for this follower
+      };
+    });
+
+    // Count the total number of followers
+    const followerCount = followersWithFlag.length;
+
+    res.status(200).json({ followers: followersWithFlag, followerCount });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching followers', error });
+  }
+};
+
+/*
 // Get followers of a user
 exports.getFollowers = async (req, res) => {
   try {
@@ -1911,8 +2014,9 @@ exports.getFollowers = async (req, res) => {
     res.status(500).json({ message: 'Error fetching followers', error });
   }
 
-};
+};*/
 
+/*
 // Get following of a user
 exports.getFollowing = async (req, res) => {
   try {
@@ -1961,3 +2065,309 @@ exports.getFollowing = async (req, res) => {
   }
 };
 
+*/
+exports.getFollowing = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Fetch the following list with their user IDs
+    const follows = await Follow.find({ followerId: userId }).select('followingId');
+
+    // Extract the following IDs from the result
+    const followingIds = follows.map(follow => follow.followingId);
+
+    // Fetch detailed information for each following user from the User table
+    const users = await User.find({ _id: { $in: followingIds } }).select('username profile.avatar');
+
+    // Get the logged-in user's followings
+    const loggedInUserFollows = await Follow.find({ followerId: userId }).select('followingId');
+
+    // Create a set of IDs that the logged-in user is following
+    const followingIdsSet = new Set(loggedInUserFollows.map(follow => follow.followingId.toString()));
+
+    // Fetch the followers count for each user being followed
+    const followersCountsPromises = followingIds.map(async (followingId) => {
+      const count = await Follow.countDocuments({ followingId });
+      return { followingId, count };
+    });
+
+    const followersCounts = await Promise.all(followersCountsPromises);
+
+    // Add the `isFollowing` flag and followers count to each user
+    const followingWithDetails = users.map(user => {
+      const followersCount = followersCounts.find(count => count.followingId.toString() === user._id.toString()).count;
+      return {
+        username: user.username,
+        avatarImage: user.profile.avatar,
+        isFollowing: followingIdsSet.has(user._id.toString()), // Check if the logged-in user follows this user
+        followersCount: followersCount, // Add followers count for this user
+      };
+    });
+
+    // Count the total number of following
+    const followingCount = followingWithDetails.length;
+
+    res.status(200).json({ following: followingWithDetails, followingCount });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching following', error });
+  }
+};
+
+
+exports.userOneVsOneList = async(req,res)=>{
+  /*const { userId, roomId, isHost, category } = req.body;
+
+  if (!userId || !roomId || isHost === undefined || !category) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    const userEntry = new UserOneVsOneList({ userId, roomId, isHost, category });
+    await userEntry.save();
+    res.status(201).json(userEntry);
+  } catch (err) {
+    res.status(500).json({ error: 'An error occurred while adding the user' });
+  }*/
+const { userId, roomId, isHost, category } = req.body;
+
+  if (!userId || !roomId || isHost === undefined || !category) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    // Check if an entry with the same userId exists
+    let userEntry = await UserOneVsOneList.findOne({ userId });
+
+    if (userEntry) {
+      // Update the existing entry
+      userEntry.roomId = roomId;
+      userEntry.isHost = isHost;
+      userEntry.category = category;
+    } else {
+      // Create a new entry
+      userEntry = new UserOneVsOneList({ userId, roomId, isHost, category });
+    }
+
+    // Save the entry (update or create)
+    await userEntry.save();
+    res.status(201).json(userEntry);
+  } catch (err) {
+    console.error('An error occurred while adding/updating the user:', err);
+    res.status(500).json({ error: 'An error occurred while adding/updating the user' });
+  }
+}
+
+//get
+exports.getUserOneVsOneList = async (req,res)=>{
+ const { category } = req.query;
+
+  if (!category) {
+    return res.status(400).json({ error: 'Category query parameter is required' });
+  }
+
+  try {
+    const users = await UserOneVsOneList.find({ category })
+      .populate({
+        path: 'userId',
+        select: '-otp' // Exclude the otp field
+      });
+
+    res.json(users);
+  } catch (err) {
+    console.error('An error occurred while fetching the users:', err);
+    res.status(500).json({ error: 'An error occurred while fetching the users' });
+  }
+}
+
+/*
+exports.getUserDetailById = async (req, res) => {
+console.log("req.params----",req.params)
+console.log("req.query-------",req.query,)
+  const userId  = req.params.userId;  // Target user ID
+  const {GetUserId}  = req.query;    // Requesting user ID
+
+  if (!userId || !GetUserId) {
+    return res.status(400).json({ error: 'User ID and GetUserId are required' });
+  }
+
+  try {
+    // Find the user by ID
+    const user = await User.findById(userId).select('-otp');
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Count the number of followers and followings
+    const followersCount = await Follow.countDocuments({ followingId: userId });
+    const followingsCount = await Follow.countDocuments({ followerId: userId });
+
+    // Check if GetUserId is following userId
+    const isFollowing = await Follow.exists({ followingId: GetUserId, followerId: userId });
+
+    // Respond with the user profile and follow counts
+    res.status(200).json({
+      userName: user.username,
+      userProfile: user.profile,
+      followersCount,
+      followingsCount,
+      isFollowing: !!isFollowing
+    });
+  } catch (error) {
+    console.error('Error retrieving user profile:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+}
+*/
+
+/*
+exports.getUserDetailById = async (req, res) => {
+  console.log("req.params----", req.params);
+  console.log("req.query-------", req.query);
+  const userId = req.params.userId;  // Target user ID
+  const { GetUserId } = req.query;    // Requesting user ID
+
+  if (!userId || !GetUserId) {
+    return res.status(400).json({ error: 'User ID and GetUserId are required' });
+  }
+
+  try {
+    // Find the user by ID
+    const user = await User.findById(userId).select('-otp');
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Count the number of followers and followings
+    const followersCount = await Follow.countDocuments({ followingId: userId });
+    const followingsCount = await Follow.countDocuments({ followerId: userId });
+
+    // Check if GetUserId is following userId
+    const isFollowing = await Follow.exists({ followerId: GetUserId, followingId: userId });
+
+    // Respond with the user profile and follow counts
+    res.status(200).json({
+      userName: user.username,
+      userProfile: user.profile,
+      followersCount,
+      followingsCount,
+      isFollowing: !!isFollowing
+    });
+  } catch (error) {
+    console.error('Error retrieving user profile:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+*/
+/*
+exports.getUserDetailById = async (req, res) => {
+  console.log("req.params----", req.params);
+  console.log("req.query-------", req.query);
+  const userId = req.params.userId;  // Target user ID
+  const { GetUserId } = req.query;    // Requesting user ID
+
+  if (!userId || !GetUserId) {
+    return res.status(400).json({ error: 'User ID and GetUserId are required' });
+  }
+
+  try {
+    // Find the user by ID
+    const user = await User.findById(userId).select('-otp');
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Count the number of followers and followings
+    const followersCount = await Follow.countDocuments({ followingId: userId });
+    const followingsCount = await Follow.countDocuments({ followerId: userId });
+
+    // Check if GetUserId is following userId
+    const isFollowing = await Follow.exists({ followerId: userId, followingId: GetUserId });
+
+    // Respond with the user profile and follow counts
+    res.status(200).json({
+      userName: user.username,
+      userProfile: user.profile,
+      followersCount,
+      followingsCount,
+      isFollowing: !!isFollowing
+    });
+  } catch (error) {
+    console.error('Error retrieving user profile:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};*/
+
+
+exports.getUserDetailById = async (req, res) => {
+  console.log("req.params----", req.params);
+  console.log("req.query-------", req.query);
+  const userId = req.params.userId;  // Target user ID
+  const { GetUserId } = req.query;    // Requesting user ID
+
+  if (!userId || !GetUserId) {
+    return res.status(400).json({ error: 'User ID and GetUserId are required' });
+  }
+
+  try {
+    // Find the requesting user by ID
+    const getUser = await User.findById(GetUserId).select('-otp');
+
+    if (!getUser) {
+      return res.status(404).json({ message: 'Requesting user not found' });
+    }
+
+    // Count the number of followers and followings for the requesting user
+    const followersCount = await Follow.countDocuments({ followingId: GetUserId });
+    const followingsCount = await Follow.countDocuments({ followerId: GetUserId });
+
+    // Check if userId is following GetUserId
+    const isFollowing = await Follow.exists({ followerId: userId, followingId: GetUserId });
+
+    // Respond with the requesting user's profile and follow counts
+    res.status(200).json({
+      userName: getUser.username,
+      userProfile: getUser.profile,
+      followersCount,
+      followingsCount,
+      isFollowing: !!isFollowing
+    });
+  } catch (error) {
+    console.error('Error retrieving user profile:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+
+exports.blockUser = async (req, res) => {
+  const { userId, blockedUserId, reason, blockFlag } = req.body;
+
+  if (!userId || !blockedUserId || !reason || blockFlag === undefined) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    // Check if the block entry already exists
+    let blockEntry = await Block.findOne({ userId, blockedUserId });
+
+    if (blockEntry) {
+      // Update existing block entry
+      blockEntry.reason = reason;
+      blockEntry.blockFlag = blockFlag;
+      blockEntry.blockedAt = Date.now();
+      await blockEntry.save();
+    } else {
+      // Create a new block entry
+      blockEntry = new Block({ userId, blockedUserId, reason, blockFlag });
+      await blockEntry.save();
+    }
+
+    res.status(201).json(blockEntry);
+  } catch (err) {
+    console.error('Error blocking user:', err);
+    res.status(500).json({ error: 'An error occurred while blocking the user' });
+  }
+};
