@@ -15,6 +15,7 @@ const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
 const Follow = require('../models/Follow');
 const Block = require('../models/BlockUser');
+const InitialCoin = require('../models/InitialCoin')
 const UserOneVsOneList = require('../models/userOneVsOneListSchema');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
@@ -265,6 +266,7 @@ exports.userVerifyOTP = async (req, res) => {
 };
 */
 
+/*
 exports.userRequestOTP = async (req, res) => {
   try {
     const { mobileNumber } = req.body;
@@ -299,6 +301,58 @@ console.log("mobileNumber----------",req.body);
     console.log(error);
     res.status(400).send({ error: error.message });
   }
+};
+*/
+
+exports.userRequestOTP = async (req, res) => {
+    try {
+        const { mobileNumber } = req.body;
+        console.log("mobileNumber----------", req.body);
+
+        // Fetch the initial coin amount from the database
+        let initialCoin = 0; // Default to 0 if no InitialCoin document exists
+        const initialCoinDoc = await InitialCoin.findOne();
+        if (initialCoinDoc) {
+            initialCoin = initialCoinDoc.coin;
+        }
+
+        let user = await User.findOne({ mobileNumber });
+        let isExistingUser = false; // Flag to indicate existing user
+
+        if (user) {
+            isExistingUser = true; // Set the flag if user exists
+        } else {
+            // Create a new user with the default username
+            user = new User({ mobileNumber, username: `user_${mobileNumber}` });
+
+            // Create a wallet for the new user with the initial amount
+            const wallet = new Wallet({ userId: user._id, balance: initialCoin });
+            await wallet.save();
+
+            // Set the initial coin balance in the user's profile
+            user.profile.coin = initialCoin;
+        }
+
+        // Make the request to the OTP service
+        const response = await axios.get(`http://2factor.in/API/V1/9e880f4a-7dc5-11ec-b9b5-0200cd936042/SMS/${mobileNumber}/AUTOGEN2`);
+        console.log("response----------", response.data);
+        
+        // Extract the OTP from the response and convert it to a number
+        const otp = parseInt(response.data.OTP, 10); // Ensure OTP is a number
+
+        // Update the user's OTP fields
+        user.otp = {
+            code: otp,
+            expiresAt: new Date(Date.now() + 1 * 60 * 1000) // OTP valid for 1 minute
+        };
+
+        await user.save();
+
+        res.status(200).send({ message: 'OTP sent successfully', isExistingUser });
+    } catch (error) {
+        console.log(error);
+        res.status(400).send({ error: error.message });
+    }
 };
 
 exports.userVerifyOTP = async (req, res) => {
@@ -2329,6 +2383,7 @@ exports.getUserDetailById = async (req, res) => {
 
     // Respond with the requesting user's profile and follow counts
     res.status(200).json({
+     userId:getUser._id,
       userName: getUser.username,
       userProfile: getUser.profile,
       followersCount,
@@ -2369,5 +2424,65 @@ exports.blockUser = async (req, res) => {
   } catch (err) {
     console.error('Error blocking user:', err);
     res.status(500).json({ error: 'An error occurred while blocking the user' });
+  }
+};
+
+
+exports.createInitialCoin = async (req, res) => {
+  try {
+      const { coin } = req.body;
+
+      const initialCoin = new InitialCoin({ coin });
+      await initialCoin.save();
+
+      res.status(201).json(initialCoin);
+  } catch (error) {
+      res.status(500).json({ message: 'Error creating initial coin', error });
+  }
+};
+
+exports.getInitialCoin = async (req, res) => {
+  try {
+      const initialCoin = await InitialCoin.findOne();
+
+      if (!initialCoin) {
+          return res.status(404).json({ message: 'Initial coin not found.' });
+      }
+
+      res.status(200).json(initialCoin);
+  } catch (error) {
+      res.status(500).json({ message: 'Error fetching initial coin', error });
+  }
+};
+
+exports.updateInitialCoin = async (req, res) => {
+  try {
+      const { coin } = req.body;
+
+      const initialCoin = await InitialCoin.findOne();
+      if (!initialCoin) {
+          return res.status(404).json({ message: 'Initial coin not found.' });
+      }
+
+      initialCoin.coin = coin;
+      initialCoin.updatedAt = Date.now();
+      await initialCoin.save();
+
+      res.status(200).json(initialCoin);
+  } catch (error) {
+      res.status(500).json({ message: 'Error updating initial coin', error });
+  }
+};
+
+exports.deleteInitialCoin = async (req, res) => {
+  try {
+      const initialCoin = await InitialCoin.findOneAndDelete();
+      if (!initialCoin) {
+          return res.status(404).json({ message: 'Initial coin not found.' });
+      }
+
+      res.status(200).json({ message: 'Initial coin deleted successfully.' });
+  } catch (error) {
+      res.status(500).json({ message: 'Error deleting initial coin', error });
   }
 };

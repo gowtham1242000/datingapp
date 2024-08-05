@@ -110,4 +110,9 @@ router.get('/getUserOneVsOneList', userController.getUserOneVsOneList);
 
 router.post('/blockUser', userController.blockUser);
 
+router.post('/createInitialCoin', userController.createInitialCoin);
+router.get('/getInitialCoin', userController.getInitialCoin);
+router.put('/updateInitialCoin', userController.updateInitialCoin);
+router.delete('/deleteInitialCoin', userController.deleteInitialCoin);
+
 module.exports = router;
