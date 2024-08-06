@@ -7,7 +7,9 @@ const userOneVsOneListSchema = new Schema({
   roomId: { type: String, required: true },
   isHost: { type: Boolean, required: true }, // true if user is hosting the room, false if connected
   category: { type: String, required: true }, // category of the room
-  connectedAt: { type: Date, default: Date.now },
+  callType: { type: String, required: true, enum: ['audio', 'video'] }, // type of call: audio or video
+  channelName: { type: String },
+  connectedAt: { type: Date, default: Date.now }
 });
 
 module.exports = mongoose.model('UserOneVsOneList', userOneVsOneListSchema);

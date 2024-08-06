@@ -16,7 +16,14 @@ const Transaction = require('../models/Transaction');
 const Follow = require('../models/Follow');
 const Block = require('../models/BlockUser');
 const InitialCoin = require('../models/InitialCoin')
-const UserOneVsOneList = require('../models/userOneVsOneListSchema');
+const UserOneVsOneList = require('../models/userOneVsOneList');
+const UserCall = require('../models/UserCall');
+const HeartCost = require('../models/HeartCost');
+const HeartConversionHistory = require('../models/HeartConversionHistory');
+const CallHeartCost = require('../models/CallHeartCost');
+const GiftTransactionHistory = require('../models/GiftTransactionHistory'); 
+const UserGift = require('../models/UserGift');
+
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const crypto = require('crypto');
@@ -27,7 +34,7 @@ const ms = require('ms');
 const sharp = require('sharp'); 
 const fs = require('fs-extra');
 const { RtcTokenBuilder, RtcRole } = require('agora-access-token');
-
+const { v4: uuidv4 } = require('uuid');
 
 
 const APP_ID = 'd742dcece1d14193a708b6e41ef2c336';
@@ -54,26 +61,7 @@ const URLpathA = 'avatar'; // Update with your URL path
 
 require("dotenv").config();
 
-exports.getToken = async (req,res)=>{
-  try{
-const { channelName, uid } = req.body;
 
-  if (!channelName || !uid) {
-    return res.status(400).json({ message: 'channelName and uid are required' });
-  }
-
-  const role = RtcRole.PUBLISHER;
-  const expirationTimeInSeconds = 3600;
-  const currentTimestamp = Math.floor(Date.now() / 1000);
-  const privilegeExpiredTs = currentTimestamp + expirationTimeInSeconds;
-
-  const token = RtcTokenBuilder.buildTokenWithUid(APP_ID, APP_CERTIFICATE, channelName, uid, role, privilegeExpiredTs);
-
-  res.json({ token });
-}catch(error){
-  res.status(500).json('Internal server Error',error)
-}
-};
 
 exports.registerAdmin = async (req, res) => {
   try{
@@ -1634,6 +1622,7 @@ try {
     // Respond with the user profile and follow counts
     res.status(200).json({
       userName: user.username,
+      userId:user._id,
       userProfile: user.profile,
       followersCount,
       followingsCount
@@ -1643,6 +1632,31 @@ try {
     res.status(500).json({ message: 'Internal server error' });
   }
 }
+
+exports.getUserCoinDetails = async (req, res) => {
+  const { userId } = req.params; // Assuming userId is passed as a URL parameter
+
+  if (!userId) {
+    return res.status(400).json({ error: 'userId is required' });
+  }
+
+  try {
+    // Fetch the user details by userId
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Extract coin details from user profile
+    const { coin } = user.profile;
+
+    res.status(200).json({ userId, coin });
+  } catch (err) {
+    console.error('An error occurred while fetching user coin details:', err);
+    res.status(500).json({ error: 'An error occurred while fetching user coin details' });
+  }
+};
 
 exports.createBanner = async(req,res)=>{
 try {
@@ -2167,7 +2181,7 @@ exports.getFollowing = async (req, res) => {
   }
 };
 
-
+/*
 exports.userOneVsOneList = async(req,res)=>{
   /*const { userId, roomId, isHost, category } = req.body;
 
@@ -2181,7 +2195,8 @@ exports.userOneVsOneList = async(req,res)=>{
     res.status(201).json(userEntry);
   } catch (err) {
     res.status(500).json({ error: 'An error occurred while adding the user' });
-  }*/
+  }
+//
 const { userId, roomId, isHost, category } = req.body;
 
   if (!userId || !roomId || isHost === undefined || !category) {
@@ -2210,6 +2225,105 @@ const { userId, roomId, isHost, category } = req.body;
     res.status(500).json({ error: 'An error occurred while adding/updating the user' });
   }
 }
+*/
+
+exports.userOneVsOneList = async (req, res) => {
+  const { userId, roomId, isHost, category, callType } = req.body;
+
+  if (!userId || isHost === undefined || !category || !callType) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    let channelName;
+    let generatedRoomId = roomId || uuidv4(); // Generate a new roomId if not provided
+
+    if (isHost) {
+      channelName = `${generatedRoomId}-${category}`;
+
+      // Create a token for the host
+      const hostToken = RtcTokenBuilder.buildTokenWithUid(APP_ID, APP_CERTIFICATE, channelName, userId, RtcRole.PUBLISHER, Math.floor(Date.now() / 1000) + 3600);
+
+      // Save host information
+      const userEntry = new UserOneVsOneList({
+        userId,
+        roomId: generatedRoomId,
+        isHost,
+        category,
+        callType,
+        channelName
+      });
+      await userEntry.save();
+
+      // Notify that the host has started the call
+      res.status(201).json({ message: 'Host created the call', token: hostToken, channelName, roomId: generatedRoomId });
+    } else {
+      // Fetch host details
+      const hostEntry = await UserOneVsOneList.findOne({ roomId: generatedRoomId, isHost: true, category });
+
+      if (!hostEntry) {
+        return res.status(404).json({ message: 'Host not found for the specified room and category' });
+      }
+
+      // Generate token for joiner
+      const joinerToken = RtcTokenBuilder.buildTokenWithUid(APP_ID, APP_CERTIFICATE, hostEntry.channelName, userId, RtcRole.SUBSCRIBER, Math.floor(Date.now() / 1000) + 3600);
+
+      // Save joiner information
+      const userEntry = new UserOneVsOneList({
+        userId,
+        roomId: generatedRoomId,
+        isHost,
+        category,
+        callType
+      });
+      await userEntry.save();
+
+      // Save call details
+      const newCall = new UserCall({
+        hostId: hostEntry.userId,
+        joinerId: userId,
+        category,
+        callType,
+        roomId:generatedRoomId,
+        channelName: hostEntry.channelName
+      });
+      await newCall.save();
+
+      // Notify that the joiner joined the call
+      res.status(201).json({ message: 'Joiner joined the call', token: joinerToken });
+    }
+  } catch (err) {
+    console.error('An error occurred while adding/updating the user:', err);
+    res.status(500).json({ error: 'An error occurred while adding/updating the user' });
+  }
+};
+
+exports.endCall = async (req, res) => {
+  const { hostId, joinerId, roomId } = req.body;
+
+  if (!hostId || !joinerId || !roomId) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    // Find and update the call entry
+    const callEntry = await UserCall.findOneAndUpdate(
+      { roomId, $or: [{ hostId }, { joinerId }] },
+      { callEnded: true, callEndedAt: new Date() },
+      { new: true }
+    );
+
+    if (!callEntry) {
+      return res.status(404).json({ message: 'Call not found' });
+    }
+
+    // Notify the client
+    res.status(200).json({ message: 'Call ended successfully', callEntry });
+  } catch (err) {
+    console.error('An error occurred while ending the call:', err);
+    res.status(500).json({ error: 'An error occurred while ending the call' });
+  }
+};
 
 //get
 exports.getUserOneVsOneList = async (req,res)=>{
@@ -2233,127 +2347,6 @@ exports.getUserOneVsOneList = async (req,res)=>{
   }
 }
 
-/*
-exports.getUserDetailById = async (req, res) => {
-console.log("req.params----",req.params)
-console.log("req.query-------",req.query,)
-  const userId  = req.params.userId;  // Target user ID
-  const {GetUserId}  = req.query;    // Requesting user ID
-
-  if (!userId || !GetUserId) {
-    return res.status(400).json({ error: 'User ID and GetUserId are required' });
-  }
-
-  try {
-    // Find the user by ID
-    const user = await User.findById(userId).select('-otp');
-
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    // Count the number of followers and followings
-    const followersCount = await Follow.countDocuments({ followingId: userId });
-    const followingsCount = await Follow.countDocuments({ followerId: userId });
-
-    // Check if GetUserId is following userId
-    const isFollowing = await Follow.exists({ followingId: GetUserId, followerId: userId });
-
-    // Respond with the user profile and follow counts
-    res.status(200).json({
-      userName: user.username,
-      userProfile: user.profile,
-      followersCount,
-      followingsCount,
-      isFollowing: !!isFollowing
-    });
-  } catch (error) {
-    console.error('Error retrieving user profile:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-}
-*/
-
-/*
-exports.getUserDetailById = async (req, res) => {
-  console.log("req.params----", req.params);
-  console.log("req.query-------", req.query);
-  const userId = req.params.userId;  // Target user ID
-  const { GetUserId } = req.query;    // Requesting user ID
-
-  if (!userId || !GetUserId) {
-    return res.status(400).json({ error: 'User ID and GetUserId are required' });
-  }
-
-  try {
-    // Find the user by ID
-    const user = await User.findById(userId).select('-otp');
-
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    // Count the number of followers and followings
-    const followersCount = await Follow.countDocuments({ followingId: userId });
-    const followingsCount = await Follow.countDocuments({ followerId: userId });
-
-    // Check if GetUserId is following userId
-    const isFollowing = await Follow.exists({ followerId: GetUserId, followingId: userId });
-
-    // Respond with the user profile and follow counts
-    res.status(200).json({
-      userName: user.username,
-      userProfile: user.profile,
-      followersCount,
-      followingsCount,
-      isFollowing: !!isFollowing
-    });
-  } catch (error) {
-    console.error('Error retrieving user profile:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-};
-
-*/
-/*
-exports.getUserDetailById = async (req, res) => {
-  console.log("req.params----", req.params);
-  console.log("req.query-------", req.query);
-  const userId = req.params.userId;  // Target user ID
-  const { GetUserId } = req.query;    // Requesting user ID
-
-  if (!userId || !GetUserId) {
-    return res.status(400).json({ error: 'User ID and GetUserId are required' });
-  }
-
-  try {
-    // Find the user by ID
-    const user = await User.findById(userId).select('-otp');
-
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    // Count the number of followers and followings
-    const followersCount = await Follow.countDocuments({ followingId: userId });
-    const followingsCount = await Follow.countDocuments({ followerId: userId });
-
-    // Check if GetUserId is following userId
-    const isFollowing = await Follow.exists({ followerId: userId, followingId: GetUserId });
-
-    // Respond with the user profile and follow counts
-    res.status(200).json({
-      userName: user.username,
-      userProfile: user.profile,
-      followersCount,
-      followingsCount,
-      isFollowing: !!isFollowing
-    });
-  } catch (error) {
-    console.error('Error retrieving user profile:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-};*/
 
 
 exports.getUserDetailById = async (req, res) => {
@@ -2485,4 +2478,341 @@ exports.deleteInitialCoin = async (req, res) => {
   } catch (error) {
       res.status(500).json({ message: 'Error deleting initial coin', error });
   }
+};
+
+
+exports.createOrUpdateHeartCost = async (req, res) => {
+  try {
+    const { costPerHeart } = req.body;
+
+    if (costPerHeart === undefined) {
+      return res.status(400).json({ error: 'costPerHeart is required' });
+    }
+
+    let heartCost = await HeartCost.findOne();
+    
+    if (heartCost) {
+      // Update existing heart cost
+      heartCost.costPerHeart = costPerHeart;
+      await heartCost.save();
+    } else {
+      // Create new heart cost
+      heartCost = new HeartCost({ costPerHeart });
+      await heartCost.save();
+    }
+
+    res.status(200).json(heartCost);
+  } catch (err) {
+    console.error('An error occurred while creating/updating heart cost:', err);
+    res.status(500).json({ error: 'An error occurred while creating/updating heart cost' });
+  }
+};
+
+exports.getHeartCost = async (req, res) => {
+  try {
+    const heartCost = await HeartCost.findOne();
+    if (!heartCost) {
+      return res.status(404).json({ error: 'Heart cost not found' });
+    }
+    res.status(200).json(heartCost);
+  } catch (err) {
+    console.error('An error occurred while fetching heart cost:', err);
+    res.status(500).json({ error: 'An error occurred while fetching heart cost' });
+  }
+};
+
+// Delete Heart Cost
+exports.deleteHeartCost = async (req, res) => {
+  try {
+    await HeartCost.deleteOne({});
+    res.status(200).json({ message: 'Heart cost deleted successfully' });
+  } catch (err) {
+    console.error('An error occurred while deleting heart cost:', err);
+    res.status(500).json({ error: 'An error occurred while deleting heart cost' });
+  }
+};
+
+
+exports.convertHeartsToAmount = async (req, res) => {
+  const { userId, heartsToConvert } = req.body;
+	if (!userId || heartsToConvert === undefined) {
+    return res.status(400).json({ error: 'userId and heartsToConvert are required' });
+  }
+
+  try {
+    // Fetch the cost per heart
+    const heartCost = await HeartCost.findOne();
+    if (!heartCost) {
+      return res.status(404).json({ error: 'Heart cost not found' });
+    }
+
+    // Calculate the amount
+    const amount = heartsToConvert * heartCost.costPerHeart;
+
+    // Fetch the user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Check if the user has enough hearts
+    if (user.hearts < heartsToConvert) {
+      return res.status(400).json({ error: 'Not enough hearts' });
+    }
+
+    // Update user profile wallet balance
+    await User.findByIdAndUpdate(userId, {
+      $inc: { 'profile.walletBalance': amount, 'profile.heartBalance': -heartsToConvert }
+    });
+
+    // Update wallet collection balance
+    const wallet = await Wallet.findOne({ userId });
+    if (wallet) {
+      wallet.balance += amount;
+      await wallet.save();
+    } else {
+      const newWallet = new Wallet({ userId, balance: amount });
+      await newWallet.save();
+    }
+
+    // Log the conversion history
+    const conversionHistory = new HeartConversionHistory({
+      userId,
+      heartsConverted: heartsToConvert,
+      amountReceived: amount
+    });
+    await conversionHistory.save();
+
+    res.status(200).json({ message: 'Hearts converted to amount successfully', amount });
+  } catch (err) {
+    console.error('An error occurred during heart conversion:', err);
+    res.status(500).json({ error: 'An error occurred during heart conversion' });
+  }
+};
+
+exports.getConversionHistory = async (req, res) => {
+  const { userId } = req.params;
+
+  if (!userId) {
+    return res.status(400).json({ error: 'userId is required' });
+  }
+
+  try {
+    const history = await HeartConversionHistory.find({ userId }).sort({ timestamp: -1 });
+    res.status(200).json(history);
+  } catch (err) {
+    console.error('An error occurred while retrieving conversion history:', err);
+    res.status(500).json({ error: 'An error occurred while retrieving conversion history' });
+  }
+};
+
+
+//CallHeartCost
+
+
+exports.createOrUpdateHeartCost = async (req, res) => {
+  const { callHeartCost } = req.body;
+
+  if (callHeartCost === undefined) {
+    return res.status(400).json({ error: 'callHeartCost is required' });
+  }
+
+  try {
+    // Check if a heart cost record already exists
+    let heartCost = await CallHeartCost.findOne();
+
+    if (heartCost) {
+      // Update the existing record
+      heartCost.callHeartCost = callHeartCost;
+    } else {
+      // Create a new record
+      heartCost = new CallHeartCost({ callHeartCost });
+    }
+
+    await heartCost.save();
+    res.status(200).json({ message: 'Heart cost updated successfully', heartCost });
+  } catch (err) {
+    console.error('An error occurred while creating/updating heart cost:', err);
+    res.status(500).json({ error: 'An error occurred while creating/updating heart cost' });
+  }
+};
+
+
+exports.getCallHeartCost = async (req, res) => {
+  try {
+    const heartCost = await CallHeartCost.findOne();
+
+    if (!heartCost) {
+      return res.status(404).json({ message: 'Heart cost not found' });
+    }
+
+    res.status(200).json(heartCost);
+  } catch (err) {
+    console.error('An error occurred while fetching heart cost:', err);
+    res.status(500).json({ error: 'An error occurred while fetching heart cost' });
+  }
+};
+
+/*
+exports.buyGift = async (req, res) => {
+    const { userId, giftId } = req.body;
+
+    if (!userId || !giftId) {
+        return res.status(400).json({ error: 'userId and giftId are required' });
+    }
+
+    try {
+        // Fetch user details
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Fetch gift details
+        const gift = await Gift.findById(giftId);
+        if (!gift) {
+            return res.status(404).json({ error: 'Gift not found' });
+        }
+
+        // Check if user has enough coins
+        if (user.profile.coin < gift.newPrice) {
+            return res.status(400).json({ error: 'Insufficient coins' });
+        }
+
+        // Deduct coins from user's balance
+        user.profile.coin -= gift.newPrice;
+
+        // Save the updated user details
+        await user.save();
+
+        // Store transaction history
+        const transaction = new GiftTransactionHistory({
+            userId: user._id,
+            giftId: gift._id,
+            giftName: gift.giftName,
+            amount: gift.newPrice,
+            coinAmount: gift.newPrice // Ensure coinAmount is set correctly
+        });
+        await transaction.save();
+
+        res.status(200).json({
+            message: 'Gift purchased successfully',
+            user: {
+                userId: user._id,
+                coinsRemaining: user.profile.coin,
+                walletBalance: user.profile.walletBalance
+            },
+            transaction: {
+                transactionId: transaction._id,
+                giftId: transaction.giftId,
+                giftName: transaction.giftName,
+                amount: transaction.amount,
+                coinAmount: transaction.coinAmount, // Include coinAmount in the response
+                date: transaction.date
+            }
+        });
+    } catch (err) {
+        console.error('An error occurred while buying the gift:', err);
+        res.status(500).json({ error: 'An error occurred while buying the gift' });
+    }
+};
+*/
+
+exports.buyGift = async (req, res) => {
+    const { userId, giftId } = req.body;
+
+    if (!userId || !giftId) {
+        return res.status(400).json({ error: 'userId and giftId are required' });
+    }
+
+    try {
+        // Fetch user details
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Fetch gift details
+        const gift = await Gift.findById(giftId);
+        if (!gift) {
+            return res.status(404).json({ error: 'Gift not found' });
+        }
+
+        // Check if user has enough coins
+        if (user.profile.coin < gift.newPrice) {
+            return res.status(400).json({ error: 'Insufficient coins' });
+        }
+
+        // Deduct coins from user's balance
+        user.profile.coin -= gift.newPrice;
+
+        // Save the updated user details
+        await user.save();
+
+        // Store transaction history
+        const transaction = new GiftTransactionHistory({
+            userId: user._id,
+            giftId: gift._id,
+            giftName: gift.giftName,
+            amount: gift.newPrice,
+            coinAmount: gift.newPrice
+        });
+        await transaction.save();
+
+        // Check if the user already has a record for this gift
+        let userGift = await UserGift.findOne({ userId: user._id, giftId: gift._id });
+
+        if (userGift) {
+            // Increment the gift count
+            userGift.count += 1;
+            userGift.transactionId = transaction._id;
+            userGift.amount = gift.newPrice;
+            userGift.coinAmount = gift.newPrice;
+            userGift.date = transaction.date;
+        } else {
+            // Create a new user gift record
+            userGift = new UserGift({
+                userId: user._id,
+                transactionId: transaction._id,
+                giftId: gift._id,
+                giftName: gift.giftName,
+                amount: gift.newPrice,
+                coinAmount: gift.newPrice,
+                date: transaction.date,
+                count: 1
+            });
+        }
+
+        await userGift.save();
+
+        res.status(200).json({
+            message: 'Gift purchased successfully',
+            user: {
+                userId: user._id,
+                coinsRemaining: user.profile.coin,
+                walletBalance: user.profile.walletBalance
+            },
+            transaction: {
+                transactionId: transaction._id,
+                giftId: transaction.giftId,
+                giftName: transaction.giftName,
+                amount: transaction.amount,
+                coinAmount: transaction.coinAmount,
+                date: transaction.date
+            },
+            userGift: {
+                userId: userGift.userId,
+                transactionId: userGift.transactionId,
+                giftId: userGift.giftId,
+                giftName: userGift.giftName,
+                amount: userGift.amount,
+                coinAmount: userGift.coinAmount,
+                date: userGift.date,
+                count: userGift.count
+            }
+        });
+    } catch (err) {
+        console.error('An error occurred while buying the gift:', err);
+        res.status(500).json({ error: 'An error occurred while buying the gift' });
+    }
 };

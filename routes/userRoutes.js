@@ -82,10 +82,10 @@ router.delete('/deleteCategoryById/:id', userController.deleteCategoryById);
 //router.get('/profile', authenticateJWT, userController.getProfile);
 //router.put('/profile', authenticateJWT, userController.updateProfile);
 
-router.post('/getToken', userController.getToken);
+//router.post('/getToken', userController.getToken);
 
 router.get('/getUsers', userController.getUsers);
-
+router.get('/getUserCoinDetails/:userId', userController.getUserCoinDetails)
 
 // Wallet
 router.post('/createWallet', userController.createWallet);
@@ -114,5 +114,19 @@ router.post('/createInitialCoin', userController.createInitialCoin);
 router.get('/getInitialCoin', userController.getInitialCoin);
 router.put('/updateInitialCoin', userController.updateInitialCoin);
 router.delete('/deleteInitialCoin', userController.deleteInitialCoin);
+
+router.post('/endCall', userController.endCall);
+
+//heart conversion
+router.post('/createOrUpdateHeartCost', userController.createOrUpdateHeartCost);
+router.get('/getHeartCost', userController.getHeartCost);
+router.delete('/deleteHeartCost', userController.deleteHeartCost);
+router.post('/convertHeartsToAmount', userController.convertHeartsToAmount);
+router.get('/getConversionHistory/:userId', userController.getConversionHistory);
+
+router.post('/createOrUpdateHeartCost', userController.createOrUpdateHeartCost);
+router.get('/getCallHeartCost', userController.getCallHeartCost);
+
+router.post('/buyGift', userController.buyGift);
 
 module.exports = router;
