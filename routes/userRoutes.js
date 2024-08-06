@@ -115,6 +115,7 @@ router.get('/getInitialCoin', userController.getInitialCoin);
 router.put('/updateInitialCoin', userController.updateInitialCoin);
 router.delete('/deleteInitialCoin', userController.deleteInitialCoin);
 
+router.get('/getUserGift/:userId', userController.getUserGift);
 router.post('/endCall', userController.endCall);
 
 //heart conversion
@@ -128,5 +129,17 @@ router.post('/createOrUpdateHeartCost', userController.createOrUpdateHeartCost);
 router.get('/getCallHeartCost', userController.getCallHeartCost);
 
 router.post('/buyGift', userController.buyGift);
+router.post('/shareGift', userController.shareGift);
+router.post('/createOrUpdateCoinOfferBanner', userController.createOrUpdateCoinOfferBanner);
+router.get('/getCoinOfferBannerById/:id', userController.getCoinOfferBannerById);
+router.get('/getCoinOfferBanner', userController.getCoinOfferBanner);
 
+
+
+router.post('/recordCoinPurchase', userController.recordCoinPurchase);
+router.get('/getTransactionHistory/:userId', userController.getTransactionHistory)
+
+router.get('/getCoinTransactionHistory/:userId', userController.getCoinTransactionHistory)
+
+router.post('/buyCoinPackage', userController.buyCoinPackage)
 module.exports = router;

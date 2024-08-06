@@ -23,6 +23,9 @@ const HeartConversionHistory = require('../models/HeartConversionHistory');
 const CallHeartCost = require('../models/CallHeartCost');
 const GiftTransactionHistory = require('../models/GiftTransactionHistory'); 
 const UserGift = require('../models/UserGift');
+const CoinOfferBanner = require('../models/CoinOfferBanner');
+const CoinPurchaseTransaction = require('../models/CoinPurchaseTransaction');
+const CoinTransactionHistory = require('../models/CoinTransactionHistory');
 
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
@@ -56,7 +59,8 @@ const moodPath = '/etc/ec/data';
 const URLpathM = 'moods';
 const AvatarPath = '/etc/ec/data'; // Update with your directory path
 const URLpathA = 'avatar'; // Update with your URL path
-
+const LanguagePath = '/etc/ec/data'; // Adjust the path as necessary
+const URLpathL = 'Language'; 
 
 
 require("dotenv").config();
@@ -107,7 +111,7 @@ exports.loginAdmin = async (req, res) => {
 }
 };
 
-
+/*
 exports.createlanguage = async (req, res) => {
   try {
       const { language, status, code } = req.body;
@@ -134,7 +138,76 @@ exports.createlanguage = async (req, res) => {
       res.status(500).json({ error: 'Internal server error' });
   }
 };
+*/
+exports.createlanguage = async (req, res) => {
+    try {
+        const { language, status, code } = req.body;
 
+        // Validate input
+        if (!language || !status || !code) {
+            return res.status(400).json({ error: 'Language, status, and code are required' });
+        }
+
+        let avatarPath = '';
+
+        // Handle avatar image upload
+        if (req.files && req.files.image) {
+            const image = req.files.image;
+console.log("image----",image);
+            const name = 'avatar';
+            const finalName = name.replace(/\s+/g, '_');
+            const desImageDir = `${LanguagePath}/${finalName}`;
+
+            if (!fs.existsSync(desImageDir)) {
+                fs.mkdirSync(desImageDir, { recursive: true });
+            }
+
+            const imageName = image.name.replace(/ /g, '_');
+            const originalImagePath = `${desImageDir}/${imageName}`;
+            fs.writeFileSync(originalImagePath, image.data);
+
+            const thumbnailDir = `${LanguagePath}/thumbnails`;
+            if (!fs.existsSync(thumbnailDir)) {
+                fs.mkdirSync(thumbnailDir, { recursive: true });
+            }
+
+            const extension = path.extname(image.name).toLowerCase();
+            const thumbnailImagePath = `${thumbnailDir}/${path.basename(imageName, extension)}.webp`;
+            let pipeline;
+
+            if (extension === '.png' || extension === '.jpg' || extension === '.jpeg') {
+                pipeline = sharp(originalImagePath)
+                    .resize({ width: 200, height: 200 })
+                    .toFormat('webp')
+                    .webp({ quality: 80 })
+                    .toFile(thumbnailImagePath);
+            } else {
+                throw new Error('Unsupported file format');
+            }
+
+            await pipeline;
+
+            avatarPath = `https://salesman.aindriya.co.in/${finalName}/${imageName}`;
+        }
+
+        // Create a new language document
+        const newLanguage = new Language({
+            language,
+            status,
+            code,
+            avatar: avatarPath
+        });
+
+        // Save the language document to the database
+        await newLanguage.save();
+
+        // Return a success response
+        res.status(201).json({ message: 'Language created successfully', language: newLanguage });
+    } catch (error) {
+        console.error('Error creating language:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
 exports.getAllLanguages = async (req, res) => {
   try {
       const languages = await Language.find();
@@ -293,7 +366,7 @@ console.log("mobileNumber----------",req.body);
 */
 
 exports.userRequestOTP = async (req, res) => {
-    try {
+   /* try {
         const { mobileNumber } = req.body;
         console.log("mobileNumber----------", req.body);
 
@@ -340,6 +413,56 @@ exports.userRequestOTP = async (req, res) => {
     } catch (error) {
         console.log(error);
         res.status(400).send({ error: error.message });
+    }*/
+try {
+        const { mobileNumber } = req.body;
+        console.log("mobileNumber----------", req.body);
+
+        // Fetch the initial coin amount from the database
+        let initialCoin = 0; // Default to 0 if no InitialCoin document exists
+        const initialCoinDoc = await InitialCoin.findOne();
+        if (initialCoinDoc) {
+            initialCoin = initialCoinDoc.coin;
+        }
+
+        let user = await User.findOne({ mobileNumber });
+        let newUser = false; // Flag to indicate new user
+
+        if (user) {
+            console.log('Existing user found:', user);
+            user.newUser = false; // Set the flag to false for existing users
+        } else {
+            // Create a new user with the default username
+            user = new User({ mobileNumber, username: `user_${mobileNumber}`, newUser: true });
+            newUser = true; // Set the flag if new user is created
+
+            // Create a wallet for the new user with the initial amount
+            const wallet = new Wallet({ userId: user._id, balance: initialCoin });
+            await wallet.save();
+
+            // Set the initial coin balance in the user's profile
+            user.profile.coin = initialCoin;
+        }
+
+        // Make the request to the OTP service
+        const response = await axios.get(`http://2factor.in/API/V1/9e880f4a-7dc5-11ec-b9b5-0200cd936042/SMS/${mobileNumber}/AUTOGEN2`);
+        console.log("response----------", response.data);
+
+        // Extract the OTP from the response and convert it to a number
+        const otp = parseInt(response.data.OTP, 10); // Ensure OTP is a number
+
+        // Update the user's OTP fields
+        user.otp = {
+            code: otp,
+            expiresAt: new Date(Date.now() + 1 * 60 * 1000) // OTP valid for 1 minute
+        };
+
+        await user.save();
+
+        res.status(200).send({ message: 'OTP sent successfully', newUser });
+    } catch (err) {
+        console.error('An error occurred while sending the OTP:', err);
+        res.status(500).send({ error: 'An error occurred while sending the OTP' });
     }
 };
 
@@ -1633,8 +1756,9 @@ try {
   }
 }
 
+/*
 exports.getUserCoinDetails = async (req, res) => {
-  const { userId } = req.params; // Assuming userId is passed as a URL parameter
+  const userId = req.params; // Assuming userId is passed as a URL parameter
 
   if (!userId) {
     return res.status(400).json({ error: 'userId is required' });
@@ -1642,6 +1766,7 @@ exports.getUserCoinDetails = async (req, res) => {
 
   try {
     // Fetch the user details by userId
+console.log('userId---------',userId)
     const user = await User.findById(userId);
 
     if (!user) {
@@ -1656,6 +1781,60 @@ exports.getUserCoinDetails = async (req, res) => {
     console.error('An error occurred while fetching user coin details:', err);
     res.status(500).json({ error: 'An error occurred while fetching user coin details' });
   }
+};
+*/
+
+/*exports.getUserCoinDetails = async (req, res) => {
+    const userId = req.params.userId;
+console.log("------------",userId)
+//    if (!mongoose.Types.ObjectId.isValid(userId)) {
+  //      return res.status(400).json({ error: 'Invalid userId format' });
+   // }
+
+    try {
+        const user = await User.findById(userId).select('profile.coin');
+
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        res.status(200).json({
+            userId: user._id,
+            coins: user.profile.coin
+        });
+    } catch (err) {
+        console.error('An error occurred while fetching user coin details:', err);
+        res.status(500).json({ error: 'An error occurred while fetching user coin details' });
+    }
+};*/
+
+exports.getUserCoinDetails = async (req, res) => {
+    let userId = req.params.userId;
+    console.log("------------", userId);
+
+    try {
+        // Ensure the userId is a string and then parse it back to avoid potential issues
+        userId = JSON.stringify(userId).replace(/^"|"$/g, '');
+
+        // Validate the userId
+/*        if (!mongoose.Types.ObjectId.isValid(userId)) {
+            return res.status(400).json({ error: 'Invalid userId format' });
+        }*/
+
+        const user = await User.findById(userId).select('profile.coin');
+
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        res.status(200).json({
+            userId: user._id,
+            coins: user.profile.coin
+        });
+    } catch (err) {
+        console.error('An error occurred while fetching user coin details:', err);
+        res.status(500).json({ error: 'An error occurred while fetching user coin details' });
+    }
 };
 
 exports.createBanner = async(req,res)=>{
@@ -2691,70 +2870,6 @@ exports.buyGift = async (req, res) => {
             giftId: gift._id,
             giftName: gift.giftName,
             amount: gift.newPrice,
-            coinAmount: gift.newPrice // Ensure coinAmount is set correctly
-        });
-        await transaction.save();
-
-        res.status(200).json({
-            message: 'Gift purchased successfully',
-            user: {
-                userId: user._id,
-                coinsRemaining: user.profile.coin,
-                walletBalance: user.profile.walletBalance
-            },
-            transaction: {
-                transactionId: transaction._id,
-                giftId: transaction.giftId,
-                giftName: transaction.giftName,
-                amount: transaction.amount,
-                coinAmount: transaction.coinAmount, // Include coinAmount in the response
-                date: transaction.date
-            }
-        });
-    } catch (err) {
-        console.error('An error occurred while buying the gift:', err);
-        res.status(500).json({ error: 'An error occurred while buying the gift' });
-    }
-};
-*/
-
-exports.buyGift = async (req, res) => {
-    const { userId, giftId } = req.body;
-
-    if (!userId || !giftId) {
-        return res.status(400).json({ error: 'userId and giftId are required' });
-    }
-
-    try {
-        // Fetch user details
-        const user = await User.findById(userId);
-        if (!user) {
-            return res.status(404).json({ error: 'User not found' });
-        }
-
-        // Fetch gift details
-        const gift = await Gift.findById(giftId);
-        if (!gift) {
-            return res.status(404).json({ error: 'Gift not found' });
-        }
-
-        // Check if user has enough coins
-        if (user.profile.coin < gift.newPrice) {
-            return res.status(400).json({ error: 'Insufficient coins' });
-        }
-
-        // Deduct coins from user's balance
-        user.profile.coin -= gift.newPrice;
-
-        // Save the updated user details
-        await user.save();
-
-        // Store transaction history
-        const transaction = new GiftTransactionHistory({
-            userId: user._id,
-            giftId: gift._id,
-            giftName: gift.giftName,
-            amount: gift.newPrice,
             coinAmount: gift.newPrice
         });
         await transaction.save();
@@ -2815,4 +2930,498 @@ exports.buyGift = async (req, res) => {
         console.error('An error occurred while buying the gift:', err);
         res.status(500).json({ error: 'An error occurred while buying the gift' });
     }
+};
+*/
+exports.buyGift = async (req, res) => {
+  const { userId, giftId } = req.body;
+
+  if (!userId || !giftId) {
+    return res.status(400).json({ error: 'userId and giftId are required' });
+  }
+
+  try {
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const gift = await Gift.findById(giftId);
+    if (!gift) {
+      return res.status(404).json({ error: 'Gift not found' });
+    }
+
+    if (user.profile.coin < gift.newPrice) {
+      return res.status(400).json({ error: 'Insufficient coins' });
+    }
+
+    user.profile.coin -= gift.newPrice;
+    await user.save();
+
+    const transaction = new CoinTransactionHistory({
+      userId: user._id,
+      type: 'spend',
+      coins: gift.newPrice,
+      amountInCurrency: gift.newPrice,
+      description: `Purchased gift: ${gift.giftName}`,
+      spendingType: 'gift_purchase'
+    });
+    await transaction.save();
+
+    let userGift = await UserGift.findOne({ userId: user._id, giftId: gift._id });
+    if (userGift) {
+      userGift.count += 1;
+      userGift.transactionId = transaction._id;
+      userGift.amount = gift.newPrice;
+      userGift.coinAmount = gift.newPrice;
+      userGift.date = transaction.timestamp;
+    } else {
+      userGift = new UserGift({
+        userId: user._id,
+        transactionId: transaction._id,
+        giftId: gift._id,
+        giftName: gift.giftName,
+        amount: gift.newPrice,
+        coinAmount: gift.newPrice,
+        date: transaction.timestamp,
+        count: 1
+      });
+    }
+
+    await userGift.save();
+
+    res.status(200).json({
+      message: 'Gift purchased successfully',
+      user: {
+        userId: user._id,
+        coinsRemaining: user.profile.coin,
+        walletBalance: user.profile.walletBalance
+      },
+      transaction: {
+        transactionId: transaction._id,
+        giftId: gift._id,
+        giftName: gift.giftName,
+        amount: gift.newPrice,
+        coinAmount: gift.newPrice,
+        date: transaction.timestamp
+      },
+      userGift: {
+        userId: userGift.userId,
+        transactionId: userGift.transactionId,
+        giftId: userGift.giftId,
+        giftName: userGift.giftName,
+        amount: userGift.amount,
+        coinAmount: userGift.coinAmount,
+        date: userGift.date,
+        count: userGift.count
+      }
+    });
+  } catch (err) {
+    console.error('An error occurred while buying the gift:', err);
+    res.status(500).json({ error: 'An error occurred while buying the gift' });
+  }
+};
+
+exports.getUserGift = async (req, res) => {
+    const { userId } = req.params;
+
+    if (!userId) {
+        return res.status(400).json({ error: 'userId is required' });
+    }
+
+    try {
+        const userGifts = await UserGift.find({ userId });
+
+        res.status(200).json({ userGifts });
+    } catch (err) {
+        console.error('An error occurred while fetching user gifts:', err);
+        res.status(500).json({ error: 'An error occurred while fetching user gifts' });
+    }
+};
+
+/*
+exports.shareGift = async (req, res) => {
+    const { fromUserId, toUserId, giftId, quantity } = req.body;
+
+    if (!fromUserId || !toUserId || !giftId || !quantity) {
+        return res.status(400).json({ error: 'fromUserId, toUserId, giftId, and quantity are required' });
+    }
+
+    try {
+        // Fetch the gift from the userGift collection
+        const userGift = await UserGift.findOne({ userId: fromUserId, giftId });
+console.log("userGift------------",userGift);
+        if (!userGift) {
+            return res.status(404).json({ error: 'Gift not found in user\'s collection' });
+        }
+
+        if (userGift.count < quantity) {
+            return res.status(400).json({ error: 'Insufficient gift quantity' });
+        }
+
+        // Deduct the quantity from the fromUserId
+        userGift.count -= quantity;
+        await userGift.save();
+
+        // Add the gift to the toUserId's collection
+        let recipientGift = await UserGift.findOne({ userId: toUserId, giftId });
+
+        if (recipientGift) {
+            // Increment the gift count
+            recipientGift.count += quantity;
+        } else {
+            // Create a new user gift record for the recipient
+            recipientGift = new UserGift({
+                userId: toUserId,
+                transactionId: userGift.transactionId,
+                giftId: userGift.giftId,
+                giftName: userGift.giftName,
+                amount: userGift.amount,
+                coinAmount: userGift.coinAmount,
+                date: new Date(),
+                count: quantity
+            });
+        }
+
+        await recipientGift.save();
+
+        // Store transaction history for the share action
+        const transaction = new GiftTransactionHistory({
+            fromUserId,
+            toUserId,
+            giftId,
+            giftName: userGift.giftName,
+            amount: userGift.amount,
+            coinAmount: userGift.coinAmount,
+            date: new Date(),
+            quantity
+        });
+        await transaction.save();
+
+        res.status(200).json({
+            message: 'Gift shared successfully',
+            fromUserId,
+            toUserId,
+            giftId,
+            quantity
+        });
+    } catch (err) {
+        console.error('An error occurred while sharing the gift:', err);
+        res.status(500).json({ error: 'An error occurred while sharing the gift' });
+    }
+};
+*/
+exports.shareGift = async (req, res) => {
+    const { fromUserId, toUserId, giftId, quantity } = req.body;
+
+    if (!fromUserId || !toUserId || !giftId || !quantity) {
+        return res.status(400).json({ error: 'fromUserId, toUserId, giftId, and quantity are required' });
+    }
+
+    try {
+        // Fetch the gift from the userGift collection
+        const userGift = await UserGift.findOne({ userId: fromUserId, giftId });
+        if (!userGift) {
+            return res.status(404).json({ error: 'Gift not found in user\'s collection' });
+        }
+
+        if (userGift.count < quantity) {
+            return res.status(400).json({ error: 'Insufficient gift quantity' });
+        }
+
+        // Deduct the quantity from the fromUserId
+        userGift.count -= quantity;
+        await userGift.save();
+
+        // Add the gift to the toUserId's collection
+        let recipientGift = await UserGift.findOne({ userId: toUserId, giftId });
+
+        if (recipientGift) {
+            // Increment the gift count
+            recipientGift.count += quantity;
+        } else {
+            // Create a new user gift record for the recipient
+            recipientGift = new UserGift({
+                userId: toUserId,
+                transactionId: userGift.transactionId,
+                giftId: userGift.giftId,
+                giftName: userGift.giftName,
+                amount: userGift.amount,
+                coinAmount: userGift.coinAmount,
+                date: new Date(),
+                count: quantity
+            });
+        }
+
+        await recipientGift.save();
+
+        // Store transaction history for the share action
+        const transaction = new CoinTransactionHistory({
+            userId: fromUserId, // Ensure this is set
+            fromUserId,
+            toUserId,
+            giftId,
+            type: 'spend',
+            coins: userGift.coinAmount * quantity,
+            amountInCurrency: userGift.amount * quantity,
+            description: `Shared gift: ${userGift.giftName}`,
+            spendingType: 'gift_share',
+            timestamp: new Date(),
+            quantity
+        });
+
+        await transaction.save();
+
+        res.status(200).json({
+            message: 'Gift shared successfully',
+            fromUserId,
+            toUserId,
+            giftId,
+            quantity
+        });
+    } catch (err) {
+        console.error('An error occurred while sharing the gift:', err);
+        res.status(500).json({ error: 'An error occurred while sharing the gift' });
+    }
+};
+
+exports.createOrUpdateCoinOfferBanner = async (req, res) => {
+    const { coin, rateInInr, text, status, viewingOrder } = req.body;
+
+    try {
+        let bannerImagePath, thumbnailImagePath;
+
+        if (req.files && req.files.image) {
+            const image = req.files.image;
+            const name = 'banner';
+            const finalName = name.replace(/\s+/g, '_');
+            const desImageDir = `${bannerPath}/${finalName}`;
+
+            if (!fs.existsSync(desImageDir)) {
+                fs.mkdirSync(desImageDir, { recursive: true });
+            }
+
+            const imageName = image.name.replace(/ /g, '_');
+            const originalImagePath = `${desImageDir}/${imageName}`;
+            fs.writeFileSync(originalImagePath, image.data);
+
+            const thumbnailDir = `${bannerPath}/thumbnails`;
+            if (!fs.existsSync(thumbnailDir)) {
+                fs.mkdirSync(thumbnailDir, { recursive: true });
+            }
+
+            const extension = path.extname(image.name).toLowerCase();
+            const thumbnailImagePath = `${thumbnailDir}/${path.basename(imageName, extension)}.webp`;
+            let pipeline;
+
+            if (extension === '.png' || extension === '.jpg' || extension === '.jpeg') {
+                pipeline = sharp(originalImagePath)
+                    .resize({ width: 200, height: 200 })
+                    .toFormat('webp')
+                    .webp({ quality: 80 })
+                    .toFile(thumbnailImagePath);
+            } else {
+                throw new Error('Unsupported file format');
+            }
+
+            await pipeline;
+
+            bannerImagePath = `https://salesman.aindriya.co.in/${finalName}/${imageName}`;
+          //  thumbnailImagePath = `https://salesman.aindriya.co.in/${URLpathB}/thumbnails/${path.basename(imageName, extension)}.webp`;
+        }
+
+        let coinOfferBanner = await CoinOfferBanner.findOne({ viewingOrder });
+
+        if (coinOfferBanner) {
+            coinOfferBanner.coin = coin;
+            coinOfferBanner.rateInInr = rateInInr;
+            coinOfferBanner.text = text;
+            coinOfferBanner.status = status;
+            coinOfferBanner.viewingOrder = viewingOrder;
+            if (bannerImagePath && thumbnailImagePath) {
+                coinOfferBanner.bannerImage = bannerImagePath;
+            //    coinOfferBanner.thumbnailImage = thumbnailImagePath;
+            }
+        } else {
+            coinOfferBanner = new CoinOfferBanner({
+                coin,
+                rateInInr,
+                text,
+                status,
+                viewingOrder,
+                bannerImage: bannerImagePath,
+              //  thumbnailImage: thumbnailImagePath
+            });
+        }
+
+        await coinOfferBanner.save();
+        res.status(200).json({ message: 'Coin offer banner created/updated successfully', coinOfferBanner });
+    } catch (err) {
+        console.error('An error occurred while creating/updating coin offer banner:', err);
+        res.status(500).json({ error: 'An error occurred while creating/updating coin offer banner' });
+    }
+};
+
+exports.getCoinOfferBanner = async (req,res)=>{
+try{
+ const coinOfferBanner = await CoinOfferBanner.find();
+ res.status(200).json(coinOfferBanner);
+}catch(err){
+console.log("err--",err)
+res.status(500).json({ error: 'An error occurred while fetching the coin offer banner' });
+}
+}
+
+exports.getCoinOfferBannerById = async (req, res) => {
+    const id= req.params.id;
+    try {
+        const coinOfferBanner = await CoinOfferBanner.findById(id);
+        if (!coinOfferBanner) {
+            return res.status(404).json({ error: 'Coin offer banner not found' });
+        }
+        res.status(200).json(coinOfferBanner);
+    } catch (err) {
+        console.error('An error occurred while fetching the coin offer banner:', err);
+        res.status(500).json({ error: 'An error occurred while fetching the coin offer banner' });
+    }
+};
+
+
+exports.recordCoinPurchase = async (req, res) => {
+  const { userId, amount, coinsPurchased, transactionId, status } = req.body;
+
+  if (!userId || !amount || !coinsPurchased || !transactionId || !status) {
+    return res.status(400).json({ error: 'All fields are required' });
+  }
+
+  try {
+    // Record the transaction
+    const transaction = new CoinPurchaseTransaction({
+      userId,
+      amount,
+      coinsPurchased,
+      transactionId,
+      status
+    });
+
+    await transaction.save();
+
+    // Update the user's coin balance
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Increment the user's coin balance
+    user.profile.coin += coinsPurchased;
+    await user.save();
+
+    res.status(201).json({ message: 'Transaction recorded successfully', transaction });
+  } catch (err) {
+    console.error('An error occurred while recording the coin purchase:', err);
+    res.status(500).json({ error: 'An error occurred while recording the coin purchase' });
+  }
+};
+
+
+exports.getTransactionHistory = async (req, res) => {
+  const { userId } = req.params;
+
+  if (!userId) {
+    return res.status(400).json({ error: 'User ID is required' });
+  }
+
+  try {
+    // Fetch transaction history for the user
+    const transactions = await CoinPurchaseTransaction.find({ userId }).sort({ transactionDate: -1 });
+
+    res.status(200).json({ transactions });
+  } catch (err) {
+    console.error('An error occurred while fetching the transaction history:', err);
+    res.status(500).json({ error: 'An error occurred while fetching the transaction history' });
+  }
+};
+
+
+exports.getCoinTransactionHistory = async (req, res) => {
+    const { userId } = req.params;
+
+    if (!userId) {
+        return res.status(400).json({ error: 'User ID is required' });
+    }
+
+    try {
+        // Fetch transaction history for the given userId
+        const transactions = await CoinTransactionHistory.find({ userId })
+            .sort({ timestamp: -1 }) // Optional: sort by latest transactions first
+            .exec();
+
+        if (!transactions.length) {
+            return res.status(404).json({ message: 'No transaction history found for this user' });
+        }
+
+        res.status(200).json({
+            userId,
+            transactions
+        });
+    } catch (err) {
+        console.error('An error occurred while fetching coin transaction history:', err);
+        res.status(500).json({ error: 'An error occurred while fetching coin transaction history' });
+    }
+}
+
+exports.buyCoinPackage = async (req, res) => {
+  const { userId, packageId } = req.body;
+
+  if (!userId || !packageId) {
+    return res.status(400).json({ error: 'userId and packageId are required' });
+  }
+
+  try {
+    // Fetch the user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Fetch the coin package
+    const coinPackage = await CoinPackage.findById(packageId);
+    if (!coinPackage || !coinPackage.status) {
+      return res.status(404).json({ error: 'Coin package not found or inactive' });
+    }
+
+    // Update the user's coin balance
+    user.profile.coin += coinPackage.coin;
+    await user.save();
+
+    // Record the transaction in CoinTransactionHistory
+    const transaction = new CoinTransactionHistory({
+      userId: user._id,
+      type: 'earn',
+      coins: coinPackage.coin,
+      amountInCurrency: coinPackage.rateInInr,
+      description: `Purchased ${coinPackage.coin} coins for ₹${coinPackage.rateInInr}`,
+      spendingType: 'coin_purchase'
+    });
+    await transaction.save();
+
+    res.status(200).json({
+      message: 'Coin package purchased successfully',
+      user: {
+        userId: user._id,
+        coins: user.profile.coin,
+  //      walletBalance: user.profile.walletBalance // If walletBalance is part of user profile
+      },
+      transaction: {
+        transactionId: transaction._id,
+        coins: transaction.coins,
+        amountInCurrency: transaction.amountInCurrency,
+        description: transaction.description,
+        date: transaction.timestamp
+      }
+    });
+  } catch (err) {
+    console.error('An error occurred while purchasing the coin package:', err);
+    res.status(500).json({ error: 'An error occurred while purchasing the coin package' });
+  }
 };

@@ -69,6 +69,7 @@ const userSchema = new mongoose.Schema({
     gifts: { type: Number, default: 0 },
     avatar: String
   },
+ newUser: { type: Boolean, default: true }
 }, { timestamps: true });
 
 // Method to generate OTP
